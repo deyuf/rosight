@@ -7,7 +7,6 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
-    labels: [dependencies, ci]
 
   - package-ecosystem: "pip"
     directory: "/"
@@ -16,7 +15,6 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
-    labels: [dependencies]
     groups:
       dev-tooling:
         patterns:
