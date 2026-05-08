@@ -106,27 +106,34 @@ jobs:
       image: ros:${{ matrix.distro }}-ros-base
     steps:
       - uses: actions/checkout@v4
-      - name: Install Python deps
+      - name: Bootstrap venv
         shell: bash
+        # Noble (Jazzy base) ships pip via apt — `pip install --upgrade pip`
+        # can't uninstall it ("RECORD file not found"). Create a venv with
+        # --system-site-packages so rclpy and the rest of /opt/ros stay
+        # importable, but lazyros + Textual + plotext go into an isolated
+        # site-packages where pip can manage itself.
         run: |
           set -ex
           apt-get update
           apt-get install -y --no-install-recommends python3-pip python3-venv
-          # PEP 668: use --break-system-packages on newer pip; fall back for old pip.
-          PIP_FLAGS=""
-          if pip3 install --help 2>&1 | grep -q break-system-packages; then
-            PIP_FLAGS="--break-system-packages"
-          fi
-          pip3 install $PIP_FLAGS --upgrade pip
-          pip3 install $PIP_FLAGS -e ".[dev]"
+          python3 -m venv --system-site-packages /opt/lazyros-venv
+          source /opt/lazyros-venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
       - name: Run unit tests inside ROS env
         shell: bash
         # Important: do NOT use `set -u` here. The ROS setup scripts read
-        # variables that may not be defined yet (AMENT_PREFIX_PATH etc.) and
-        # would abort the whole step under `set -u`.
+        # variables that may not be defined yet (AMENT_TRACE_SETUP_FILES,
+        # AMENT_PREFIX_PATH, ...) and would abort the whole step under -u.
+        env:
+          TERM: xterm-256color
+          COLUMNS: "120"
+          LINES: "40"
         run: |
           set -e
           source /opt/ros/${{ matrix.distro }}/setup.bash
+          source /opt/lazyros-venv/bin/activate
           pytest -q --tb=short tests/
       - name: Headless launch smoke
         shell: bash
@@ -137,7 +144,8 @@ jobs:
         run: |
           set -e
           source /opt/ros/${{ matrix.distro }}/setup.bash
-          python3 - <<'PY'
+          source /opt/lazyros-venv/bin/activate
+          python - <<'PY'
           import asyncio
           from lazyros.app import LazyrosApp
           from lazyros.ros.backend import RosBackend
