@@ -109,7 +109,7 @@ jobs:
       - name: Install Python deps
         shell: bash
         run: |
-          set -eux
+          set -ex
           apt-get update
           apt-get install -y --no-install-recommends python3-pip python3-venv
           # PEP 668: use --break-system-packages on newer pip; fall back for old pip.
@@ -121,14 +121,21 @@ jobs:
           pip3 install $PIP_FLAGS -e ".[dev]"
       - name: Run unit tests inside ROS env
         shell: bash
+        # Important: do NOT use `set -u` here. The ROS setup scripts read
+        # variables that may not be defined yet (AMENT_PREFIX_PATH etc.) and
+        # would abort the whole step under `set -u`.
         run: |
-          set -eux
+          set -e
           source /opt/ros/${{ matrix.distro }}/setup.bash
-          pytest -q tests/
+          pytest -q --tb=short tests/
       - name: Headless launch smoke
         shell: bash
+        env:
+          TERM: xterm-256color
+          COLUMNS: "120"
+          LINES: "40"
         run: |
-          set -eux
+          set -e
           source /opt/ros/${{ matrix.distro }}/setup.bash
           python3 - <<'PY'
           import asyncio
