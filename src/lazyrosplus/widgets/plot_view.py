@@ -120,18 +120,17 @@ class PlotView(Static):
         self.set_interval(1 / 15, self._refresh)
 
     def _refresh(self) -> None:
-        # Throttle slightly when paused to save CPU.
         now = time.monotonic()
         if now - self._last_render < (0.5 if self.paused else 1 / 15):
             return
         self._last_render = now
-        self.update(self._render())
+        self.update(self._build_content())
 
-    def _render(self) -> Text:
+    def _build_content(self) -> Text | str:
         try:
             import plotext as plt
         except ImportError:  # pragma: no cover
-            return Text("plotext is not installed", style="bold red")
+            return "[bold red]plotext is not installed[/bold red]"
 
         size = self.size
         width = max(20, size.width - 2)
