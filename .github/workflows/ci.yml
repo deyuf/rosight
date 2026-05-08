@@ -60,7 +60,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: pytest -v --cov=lazyros --cov-report=xml --cov-report=term
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.python }}
           path: coverage.xml
@@ -84,7 +84,7 @@ jobs:
       - name: Verify metadata
         run: twine check dist/*
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/*
