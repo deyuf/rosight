@@ -19,7 +19,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Auto-discovered TF tree from `/tf` and `/tf_static`.
 - `ros2 bag` record / play passthrough.
 - TOML configuration with platformdirs default location.
-- CLI entry point (`lazyros`) with `--domain-id`, `--no-ros`, log file
+- CLI entry point (`lazyrosplus`) with `--domain-id`, `--no-ros`, log file
   routing, and `--version`.
 - Comprehensive unit, integration, and headless smoke test suite.
 - GitHub Actions: lint + tests on Python 3.10–3.12, build, ROS 2

@@ -1,13 +1,13 @@
-# lazyros
+# LazyrosPlus
 
 A lazygit-style terminal UI for ROS 2.
 
-`lazyros` gives you a fast, keyboard-driven view of every running ROS 2
+`lazyrosplus` gives you a fast, keyboard-driven view of every running ROS 2
 graph: topics, nodes, services, actions, parameters, TF, and bags. It also
 embeds a live multi-series plotter so you can scope numeric fields without
 firing up `rqt_plot` or `plotjuggler`.
 
-## Why lazyros
+## Why LazyrosPlus
 
 - **No GUI required.** Runs over SSH, in a tmux pane, or on a robot console.
 - **Discovery without typing.** Tab through panels, fuzzy-filter, drill into

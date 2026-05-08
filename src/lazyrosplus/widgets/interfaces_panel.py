@@ -124,7 +124,7 @@ class InterfacesPanel(Vertical):
 
     def _show(self, name: str) -> None:
         try:
-            from lazyros.ros.introspection import (
+            from lazyrosplus.ros.introspection import (
                 get_action_class,
                 get_message_class,
                 get_service_class,

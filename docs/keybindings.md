@@ -1,6 +1,6 @@
 # Keybindings
 
-`lazyros` ships with a vim-leaning, lazygit-style keymap. Press `?` in the
+`lazyrosplus` ships with a vim-leaning, lazygit-style keymap. Press `?` in the
 running app for the same reference.
 
 ## Global

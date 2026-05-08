@@ -13,13 +13,13 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import DataTable, Static
 
-from lazyros.utils.formatting import format_value
-from lazyros.utils.path import get_value, parse_path
-from lazyros.widgets.plot_view import PlotView
+from lazyrosplus.utils.formatting import format_value
+from lazyrosplus.utils.path import get_value, parse_path
+from lazyrosplus.widgets.plot_view import PlotView
 
 if TYPE_CHECKING:
-    from lazyros.app import LazyrosApp
-    from lazyros.ros.backend import RosBackend
+    from lazyrosplus.app import LazyrosPlusApp
+    from lazyrosplus.ros.backend import RosBackend
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class PlotPanel(Vertical):
         return getattr(self.app, "ros", None)
 
     @property
-    def app_(self) -> LazyrosApp:
+    def app_(self) -> LazyrosPlusApp:
         return self.app  # type: ignore[return-value]
 
     @property
@@ -164,7 +164,7 @@ class PlotPanel(Vertical):
         if not self._sources:
             self.app_.push_status("no series to save")
             return
-        out = Path.cwd() / f"lazyros-{int(time.time())}.csv"
+        out = Path.cwd() / f"lazyrosplus-{int(time.time())}.csv"
         try:
             with out.open("w", newline="") as f:
                 w = csv.writer(f)

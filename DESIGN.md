@@ -1,6 +1,6 @@
-# lazyros — design notes
+# LazyrosPlus — design notes
 
-This document captures the architectural decisions behind lazyros. It
+This document captures the architectural decisions behind LazyrosPlus. It
 complements [`docs/architecture.md`](docs/architecture.md) which is the
 contributor-facing reference.
 
@@ -79,7 +79,7 @@ The path between executor and UI is two atomic-ish writes (`last_msg`,
 ## QoS strategy
 
 ROS 2's QoS matrix is the single biggest reason naive `ros2 topic echo`
-fails on sensor topics. lazyros calls
+fails on sensor topics. LazyrosPlus calls
 `get_publishers_info_by_topic(topic)` and then derives a subscriber
 profile that matches every publisher:
 
@@ -89,7 +89,7 @@ profile that matches every publisher:
   `VOLATILE`.
 - History: always `KEEP_LAST` with a configurable depth.
 
-This logic lives in `lazyros.ros.qos.negotiate` and is unit-tested without
+This logic lives in `lazyrosplus.ros.qos.negotiate` and is unit-tested without
 rclpy.
 
 ## Configuration philosophy
@@ -115,7 +115,7 @@ rclpy.
 - Lifecycle node state machine view.
 - Action goal/feedback monitor with state transitions.
 - Configurable keybindings.
-- Themes (`lazyros-light`, `lazyros-solarized`).
+- Themes (`lazyrosplus-light`, `lazyrosplus-solarized`).
 - Plugin hooks (`entry_points`) for custom panels.
 
 These will land incrementally and won't break the public dataclass

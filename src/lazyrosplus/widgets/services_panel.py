@@ -12,11 +12,11 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyros.utils.formatting import short_type
+from lazyrosplus.utils.formatting import short_type
 
 if TYPE_CHECKING:
-    from lazyros.app import LazyrosApp
-    from lazyros.ros.backend import RosBackend, ServiceInfo
+    from lazyrosplus.app import LazyrosPlusApp
+    from lazyrosplus.ros.backend import RosBackend, ServiceInfo
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class ServicesPanel(Vertical):
         return getattr(self.app, "ros", None)
 
     @property
-    def app_(self) -> LazyrosApp:
+    def app_(self) -> LazyrosPlusApp:
         return self.app  # type: ignore[return-value]
 
     def on_input_changed(self, event: Input.Changed) -> None:

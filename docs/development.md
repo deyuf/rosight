@@ -3,8 +3,8 @@
 ## Bootstrap
 
 ```bash
-git clone https://github.com/deyuf/lazyros
-cd lazyros
+git clone https://github.com/deyuf/lazyrosplus
+cd lazyrosplus
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,docs]"
 ```
@@ -23,19 +23,19 @@ pip install -e ".[dev,docs]"
 ```bash
 ruff check src tests              # lint
 ruff format src tests             # format
-mypy src/lazyros                  # types (advisory)
+mypy src/lazyrosplus                  # types (advisory)
 pytest                            # unit + smoke
-pytest --cov=lazyros              # with coverage
+pytest --cov=lazyrosplus              # with coverage
 mkdocs serve                      # docs preview
 ```
 
 ## Layout reminders
 
-- `src/lazyros/ros/` — anything ROS-aware. `backend.py` is the ONLY module
+- `src/lazyrosplus/ros/` — anything ROS-aware. `backend.py` is the ONLY module
   that imports `rclpy`; everything else stays import-free of ROS.
-- `src/lazyros/widgets/` — one panel per file. Cross-panel calls go via
-  `LazyrosApp` rather than direct widget references.
-- `src/lazyros/utils/` — pure-Python helpers. Test these first when
+- `src/lazyrosplus/widgets/` — one panel per file. Cross-panel calls go via
+  `LazyrosPlusApp` rather than direct widget references.
+- `src/lazyrosplus/utils/` — pure-Python helpers. Test these first when
   refactoring.
 - `tests/` — pure-python tests must run without rclpy. The
   `tiny_message` fixture in `conftest.py` provides a duck-typed ROS
@@ -43,7 +43,7 @@ mkdocs serve                      # docs preview
 
 ## Adding a new panel
 
-1. Create `src/lazyros/widgets/foo_panel.py`:
+1. Create `src/lazyrosplus/widgets/foo_panel.py`:
    ```python
    from textual.containers import Vertical
    from textual.binding import Binding
@@ -57,14 +57,14 @@ mkdocs serve                      # docs preview
    ```
 2. Register it in `app.py`:
    ```python
-   from lazyros.widgets.foo_panel import FooPanel
+   from lazyrosplus.widgets.foo_panel import FooPanel
    ...
    with TabbedContent(initial="topics", id="main-tabs"):
        ...
        with TabPane("Foo", id="foo"):
            yield FooPanel()
    ```
-3. Add a number-key binding in `LazyrosApp.BINDINGS`.
+3. Add a number-key binding in `LazyrosPlusApp.BINDINGS`.
 
 ## Adding a backend method
 
@@ -77,7 +77,7 @@ new method:
 
 ## Releasing
 
-1. Bump `__version__` in `src/lazyros/version.py`.
+1. Bump `__version__` in `src/lazyrosplus/version.py`.
 2. Update `CHANGELOG.md`.
 3. Tag `vX.Y.Z` and push tags. The `release.yml` workflow builds, attaches
    artifacts to a GitHub release, and publishes to PyPI via trusted

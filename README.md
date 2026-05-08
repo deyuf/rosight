@@ -1,8 +1,6 @@
-# lazyros
+# LazyrosPlus
 
-[![CI](https://github.com/deyuf/lazyros/actions/workflows/ci.yml/badge.svg)](https://github.com/deyuf/lazyros/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/lazyros.svg)](https://pypi.org/project/lazyros/)
-[![Python](https://img.shields.io/pypi/pyversions/lazyros.svg)](https://pypi.org/project/lazyros/)
+[![CI](https://github.com/deyuf/lazyrosplus/actions/workflows/ci.yml/badge.svg)](https://github.com/deyuf/lazyrosplus/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A **lazygit-inspired terminal UI for ROS 2**. Browse topics, nodes, services,
@@ -43,12 +41,16 @@ plot any numeric field over time, all from a single keyboard-driven interface.
 
 ## Install
 
+LazyrosPlus is not yet published to PyPI; install from source:
+
 ```bash
-pip install lazyros
+git clone https://github.com/deyuf/lazyrosplus
+cd lazyrosplus
+pip install -e .
 # or, in your ROS 2 workspace:
 source /opt/ros/<distro>/setup.bash
-pip install lazyros
-lazyros
+pip install -e .
+lazyrosplus
 ```
 
 See [`docs/installation.md`](docs/installation.md) for distribution-specific
@@ -58,13 +60,13 @@ notes (Humble, Iron, Jazzy, Rolling).
 
 ```bash
 # launch (uses ROS_DOMAIN_ID from env)
-lazyros
+lazyrosplus
 
 # pick a domain and write logs to a file
-lazyros --domain-id 5 --log-file /tmp/lazyros.log
+lazyrosplus --domain-id 5 --log-file /tmp/lazyrosplus.log
 
 # ui-only, no ROS connection
-lazyros --no-ros
+lazyrosplus --no-ros
 ```
 
 Press `?` at any time for the full keyboard reference, or `:` for the command
@@ -86,7 +88,7 @@ palette.
 ## Project layout
 
 ```
-src/lazyros/
+src/lazyrosplus/
 ├── app.py            # Textual App, panel registry, key bindings
 ├── cli.py            # argparse entry point
 ├── config.py         # TOML config loader

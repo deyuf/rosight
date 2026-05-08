@@ -12,10 +12,10 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyros.utils.formatting import short_type
+from lazyrosplus.utils.formatting import short_type
 
 if TYPE_CHECKING:
-    from lazyros.ros.backend import ActionInfo, RosBackend
+    from lazyrosplus.ros.backend import ActionInfo, RosBackend
 
 log = logging.getLogger(__name__)
 

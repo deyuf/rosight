@@ -15,7 +15,7 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
 if TYPE_CHECKING:
-    from lazyros.app import LazyrosApp
+    from lazyrosplus.app import LazyrosPlusApp
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class BagsPanel(Vertical):
         self.set_interval(1.0, self._refresh)
 
     @property
-    def app_(self) -> LazyrosApp:
+    def app_(self) -> LazyrosPlusApp:
         return self.app  # type: ignore[return-value]
 
     # ---- record / play -----------------------------------------------
@@ -82,7 +82,7 @@ class BagsPanel(Vertical):
             self.app_.push_status("recording stopped")
             return
         args = self.query_one("#record-args", Input).value.split() or ["-a"]
-        out_dir = Path.cwd() / f"lazyros-bag-{int(time.time())}"
+        out_dir = Path.cwd() / f"lazyrosplus-bag-{int(time.time())}"
         cmd = ["ros2", "bag", "record", "-o", str(out_dir), *args]
         try:
             self._record_proc = subprocess.Popen(

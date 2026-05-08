@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from lazyros.config import Config, load_config
+from lazyrosplus.config import Config, load_config
 
 
 def test_defaults():
     c = Config()
-    assert c.ui.theme == "lazyros-dark"
+    assert c.ui.theme == "lazyrosplus-dark"
     assert c.plot.window_seconds == 30.0
     assert c.ros.queue_depth == 10
 

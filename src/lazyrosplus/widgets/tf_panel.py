@@ -13,8 +13,8 @@ from textual.containers import Vertical
 from textual.widgets import Static, Tree
 
 if TYPE_CHECKING:
-    from lazyros.app import LazyrosApp
-    from lazyros.ros.backend import RosBackend
+    from lazyrosplus.app import LazyrosPlusApp
+    from lazyrosplus.ros.backend import RosBackend
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class TfPanel(Vertical):
         return getattr(self.app, "ros", None)
 
     @property
-    def app_(self) -> LazyrosApp:
+    def app_(self) -> LazyrosPlusApp:
         return self.app  # type: ignore[return-value]
 
     def _ensure_subscribed(self) -> None:

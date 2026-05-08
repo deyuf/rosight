@@ -8,7 +8,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Markdown, Static
 
 HELP_TEXT = """\
-# lazyros — keyboard reference
+# LazyrosPlus — keyboard reference
 
 | key | action |
 |-----|--------|

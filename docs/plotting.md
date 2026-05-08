@@ -21,14 +21,14 @@ There are three ways:
 
 3. **Programmatically**
    ```python
-   from lazyros.app import LazyrosApp
+   from lazyrosplus.app import LazyrosPlusApp
    ...
    app.add_plot_series("/odom", "twist.twist.linear.x")
    ```
 
 ## Field paths
 
-Paths follow a small DSL parsed by `lazyros.utils.path.parse_path`:
+Paths follow a small DSL parsed by `lazyrosplus.utils.path.parse_path`:
 
 - Dotted attributes: `pose.position.x`
 - Sequence index: `poses[3].position.x`
@@ -70,7 +70,7 @@ Press `s` to dump every series in the buffer to a CSV in the current
 directory:
 
 ```
-lazyros-1715169312.csv
+lazyrosplus-1715169312.csv
 
 timestamp,label,value
 12345.123,/odom/twist.twist.linear.x,0.182

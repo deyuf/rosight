@@ -3,12 +3,12 @@ requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
 [project]
-name = "lazyros"
+name = "lazyrosplus"
 dynamic = ["version"]
 description = "A lazygit-inspired terminal UI for ROS 2: topics, nodes, services, params, live message inspection and plotting."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "lazyros contributors" }]
+authors = [{ name = "LazyrosPlus contributors" }]
 keywords = ["ros2", "tui", "textual", "robotics", "monitoring", "plotting"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -52,23 +52,23 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/deyuf/lazyros"
-Documentation = "https://github.com/deyuf/lazyros#readme"
-Repository = "https://github.com/deyuf/lazyros"
-Issues = "https://github.com/deyuf/lazyros/issues"
+Homepage = "https://github.com/deyuf/lazyrosplus"
+Documentation = "https://github.com/deyuf/lazyrosplus#readme"
+Repository = "https://github.com/deyuf/lazyrosplus"
+Issues = "https://github.com/deyuf/lazyrosplus/issues"
 
 [project.scripts]
-lazyros = "lazyros.cli:main"
+lazyrosplus = "lazyrosplus.cli:main"
 
 [tool.hatch.version]
-path = "src/lazyros/version.py"
+path = "src/lazyrosplus/version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/lazyros"]
+packages = ["src/lazyrosplus"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "src/lazyros",
+    "src/lazyrosplus",
     "README.md",
     "LICENSE",
     "DESIGN.md",
@@ -100,10 +100,10 @@ strict_optional = true
 warn_unused_ignores = false
 ignore_missing_imports = true
 check_untyped_defs = false
-files = ["src/lazyros"]
+files = ["src/lazyrosplus"]
 
 [[tool.mypy.overrides]]
-module = "lazyros.widgets.*"
+module = "lazyrosplus.widgets.*"
 # Textual widget bases use heavy dynamic typing; relaxed here.
 disable_error_code = ["arg-type", "assignment", "return-value", "misc"]
 
@@ -122,7 +122,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
-source = ["lazyros"]
+source = ["lazyrosplus"]
 
 [tool.coverage.report]
 exclude_lines = [
