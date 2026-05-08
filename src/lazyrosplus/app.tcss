@@ -1,4 +1,4 @@
-/* lazyros — Textual stylesheet */
+/* lazyrosplus — Textual stylesheet */
 
 Screen {
     background: $background;

@@ -2,7 +2,7 @@
 
 Holds the :class:`RosBackend`, the panel registry, and the global key
 bindings. Each panel is implemented as a self-contained widget under
-``lazyros.widgets`` and registered here.
+``lazyrosplus.widgets`` and registered here.
 """
 
 from __future__ import annotations
@@ -14,29 +14,29 @@ from textual.binding import Binding
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
-from lazyros.config import Config
-from lazyros.ros.backend import RosBackend, RosUnavailable
-from lazyros.widgets.actions_panel import ActionsPanel
-from lazyros.widgets.bags_panel import BagsPanel
-from lazyros.widgets.command_palette import CommandPalette
-from lazyros.widgets.help_screen import HelpScreen
-from lazyros.widgets.interfaces_panel import InterfacesPanel
-from lazyros.widgets.nodes_panel import NodesPanel
-from lazyros.widgets.params_panel import ParamsPanel
-from lazyros.widgets.plot_panel import PlotPanel
-from lazyros.widgets.services_panel import ServicesPanel
-from lazyros.widgets.status_bar import StatusBar
-from lazyros.widgets.tf_panel import TfPanel
-from lazyros.widgets.topics_panel import TopicsPanel
+from lazyrosplus.config import Config
+from lazyrosplus.ros.backend import RosBackend, RosUnavailable
+from lazyrosplus.widgets.actions_panel import ActionsPanel
+from lazyrosplus.widgets.bags_panel import BagsPanel
+from lazyrosplus.widgets.command_palette import CommandPalette
+from lazyrosplus.widgets.help_screen import HelpScreen
+from lazyrosplus.widgets.interfaces_panel import InterfacesPanel
+from lazyrosplus.widgets.nodes_panel import NodesPanel
+from lazyrosplus.widgets.params_panel import ParamsPanel
+from lazyrosplus.widgets.plot_panel import PlotPanel
+from lazyrosplus.widgets.services_panel import ServicesPanel
+from lazyrosplus.widgets.status_bar import StatusBar
+from lazyrosplus.widgets.tf_panel import TfPanel
+from lazyrosplus.widgets.topics_panel import TopicsPanel
 
 log = logging.getLogger(__name__)
 
 
-class LazyrosApp(App[int]):
+class LazyrosPlusApp(App[int]):
     """Main Textual application."""
 
     CSS_PATH = "app.tcss"
-    TITLE = "lazyros"
+    TITLE = "LazyrosPlus"
     SUB_TITLE = "ROS 2 TUI"
 
     BINDINGS = [

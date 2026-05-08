@@ -39,7 +39,7 @@ re-renders.
 
 ## ROS layer
 
-The `lazyros.ros` package is intentionally importable without `rclpy`:
+The `lazyrosplus.ros` package is intentionally importable without `rclpy`:
 
 | Module | Purpose |
 |--------|---------|
@@ -65,7 +65,7 @@ package can be unit-tested on cloud CI runners without ROS 2 installed.
 
 Each panel is a self-contained Textual `Vertical` with its own
 `compose()`, `BINDINGS`, and CSS in `DEFAULT_CSS`. Cross-panel
-communication goes through `LazyrosApp` (e.g. the message tree posts a
+communication goes through `LazyrosPlusApp` (e.g. the message tree posts a
 `FieldSelected` event that `TopicsPanel` forwards to
 `app.add_plot_series`).
 
@@ -85,11 +85,11 @@ override `domain_id` per run.
 ## Lifecycle
 
 ```
-LazyrosApp.__init__
+LazyrosPlusApp.__init__
   └── on_mount
        ├── ros.start()        → executor thread starts
        └── set_interval(...)  → status bar tickers
-LazyrosApp.on_unmount
+LazyrosPlusApp.on_unmount
   └── ros.stop()              → shuts down node, joins thread
 ```
 
@@ -106,13 +106,13 @@ mode and shows a notification — useful for offline UI work.
 - **ROS integration job** (CI) runs the suite inside official `ros:humble`
   / `ros:jazzy` containers with a sourced workspace.
 
-## Extending lazyros
+## Extending LazyrosPlus
 
 To add a new panel:
 
-1. Create `src/lazyros/widgets/foo_panel.py` that subclasses `Vertical`
+1. Create `src/lazyrosplus/widgets/foo_panel.py` that subclasses `Vertical`
    (or another Textual container).
-2. Register it in `LazyrosApp.compose` inside the `TabbedContent` block
+2. Register it in `LazyrosPlusApp.compose` inside the `TabbedContent` block
    and add a number-key binding.
 3. If the panel needs ROS data, prefer adding methods to `RosBackend`
    over reaching into rclpy from the widget.

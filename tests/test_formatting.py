@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lazyros.utils.formatting import (
+from lazyrosplus.utils.formatting import (
     format_bytes,
     format_duration,
     format_rate,

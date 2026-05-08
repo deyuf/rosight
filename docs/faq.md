@@ -1,27 +1,27 @@
 # FAQ
 
-### lazyros says "ROS 2 unavailable" but I'm in a sourced terminal
+### LazyrosPlus says "ROS 2 unavailable" but I'm in a sourced terminal
 
 Confirm `python3 -c 'import rclpy'` works in the same terminal. If
-`lazyros` was installed in a different virtualenv than the one your shell
+`lazyrosplus` was installed in a different virtualenv than the one your shell
 is using now, source the right venv first. With Ubuntu 22/24, prefer:
 
 ```bash
-python3 -m venv --system-site-packages ~/.venvs/lazyros
-source ~/.venvs/lazyros/bin/activate
-pip install lazyros
+python3 -m venv --system-site-packages ~/.venvs/lazyrosplus
+source ~/.venvs/lazyrosplus/bin/activate
+pip install lazyrosplus
 ```
 
 so the system `rclpy` remains visible inside the venv.
 
 ### Why not use rqt / plotjuggler / rviz?
 
-Those are great GUI tools. lazyros is the keyboard-driven equivalent —
+Those are great GUI tools. LazyrosPlus is the keyboard-driven equivalent —
 runs on headless robots, over SSH, in tmux, on a phone via Termius.
 
 ### Can I subscribe to a sensor topic?
 
-Yes — `lazyros` auto-negotiates QoS based on the publisher endpoints, so
+Yes — `lazyrosplus` auto-negotiates QoS based on the publisher endpoints, so
 `BEST_EFFORT` topics (the typical sensor profile) are received correctly
 without manual configuration. If you want to force a specific profile,
 use `--config` and set `[ros] qos_profile`.
@@ -61,6 +61,6 @@ ROS-on-Windows distro and isn't actively tested.
 
 ### How is this different from `ros2 topic echo`?
 
-`echo` dumps raw messages to a terminal. lazyros adds discovery, filter,
+`echo` dumps raw messages to a terminal. LazyrosPlus adds discovery, filter,
 hz/bw, multi-topic subscription with auto-QoS, message-tree navigation
 and live plotting in one tool. For one-off taps `echo` is still faster.

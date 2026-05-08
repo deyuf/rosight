@@ -1,4 +1,4 @@
-"""Command-line entry point for ``lazyros``."""
+"""Command-line entry point for ``lazyrosplus``."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import logging
 import sys
 from pathlib import Path
 
-from lazyros.config import Config, config_path, load_config
-from lazyros.version import __version__
+from lazyrosplus.config import Config, config_path, load_config
+from lazyrosplus.version import __version__
 
 
 def _setup_logging(level: str, log_file: Path | None) -> None:
@@ -25,7 +25,7 @@ def _setup_logging(level: str, log_file: Path | None) -> None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        prog="lazyros",
+        prog="lazyrosplus",
         description="lazygit-style terminal UI for ROS 2",
     )
     p.add_argument(
@@ -35,7 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=f"path to config TOML (default: {config_path()})",
     )
     p.add_argument("--domain-id", type=int, help="override ROS_DOMAIN_ID")
-    p.add_argument("--node-name", default="lazyros", help="rclpy node name")
+    p.add_argument("--node-name", default="lazyrosplus", help="rclpy node name")
     p.add_argument(
         "--log-level",
         default="INFO",
@@ -51,7 +51,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="skip ROS 2 initialisation (useful for UI-only debugging)",
     )
-    p.add_argument("-V", "--version", action="version", version=f"lazyros {__version__}")
+    p.add_argument("-V", "--version", action="version", version=f"lazyrosplus {__version__}")
     return p.parse_args(argv)
 
 
@@ -71,15 +71,15 @@ def main(argv: list[str] | None = None) -> int:
         cfg = replace(cfg, ros=replace(cfg.ros, domain_id=args.domain_id))
 
     # Defer Textual import to keep --version fast.
-    from lazyros.app import LazyrosApp
-    from lazyros.ros.backend import RosBackend
+    from lazyrosplus.app import LazyrosPlusApp
+    from lazyrosplus.ros.backend import RosBackend
 
     ros = None
     if args.no_ros:
         ros = RosBackend(node_name=args.node_name, domain_id=cfg.ros.domain_id)
         # leave it un-started; the app will downgrade gracefully.
 
-    app = LazyrosApp(config=cfg, ros=ros)
+    app = LazyrosPlusApp(config=cfg, ros=ros)
     return app.run() or 0
 
 

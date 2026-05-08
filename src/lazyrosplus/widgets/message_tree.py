@@ -13,8 +13,8 @@ from textual.message import Message
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 
-from lazyros.ros.introspection import FieldEntry, iter_fields
-from lazyros.utils.formatting import format_value, short_type
+from lazyrosplus.ros.introspection import FieldEntry, iter_fields
+from lazyrosplus.utils.formatting import format_value, short_type
 
 
 @dataclass

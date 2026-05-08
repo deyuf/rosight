@@ -12,11 +12,11 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyros.utils.formatting import short_type
+from lazyrosplus.utils.formatting import short_type
 
 if TYPE_CHECKING:
-    from lazyros.app import LazyrosApp
-    from lazyros.ros.backend import NodeInfo, RosBackend
+    from lazyrosplus.app import LazyrosPlusApp
+    from lazyrosplus.ros.backend import NodeInfo, RosBackend
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class NodesPanel(Vertical):
         self.set_interval(2.0, self._refresh)
 
     @property
-    def app_(self) -> LazyrosApp:
+    def app_(self) -> LazyrosPlusApp:
         return self.app  # type: ignore[return-value]
 
     @property

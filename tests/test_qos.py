@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lazyros.ros.qos import (
+from lazyrosplus.ros.qos import (
     DEFAULT,
     SENSOR_DATA,
     Durability,

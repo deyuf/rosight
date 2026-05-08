@@ -14,7 +14,7 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from lazyros.utils.ringbuffer import TimedRingBuffer
+from lazyrosplus.utils.ringbuffer import TimedRingBuffer
 
 
 @dataclass

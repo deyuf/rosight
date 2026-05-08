@@ -1,12 +1,12 @@
 # Configuration
 
-`lazyros` reads a TOML config from `$XDG_CONFIG_HOME/lazyros/config.toml`
-(typically `~/.config/lazyros/config.toml`). All keys are optional;
+`lazyrosplus` reads a TOML config from `$XDG_CONFIG_HOME/lazyrosplus/config.toml`
+(typically `~/.config/lazyrosplus/config.toml`). All keys are optional;
 defaults are listed below.
 
 ```toml
 [ui]
-theme = "lazyros-dark"     # ui theme name
+theme = "lazyrosplus-dark"     # ui theme name
 refresh_hz = 10            # how often the status bar updates
 discovery_period = 1.0     # seconds between topic/node list refreshes
 vim_keys = true
@@ -30,11 +30,11 @@ queue_depth = 10           # default subscriber queue depth
 ## Overriding via CLI
 
 ```bash
-lazyros --config /path/to/alt.toml
-lazyros --domain-id 7
+lazyrosplus --config /path/to/alt.toml
+lazyrosplus --domain-id 7
 ```
 
-The CLI also accepts `LAZYROS_CONFIG=path` as an env override.
+The CLI also accepts `LAZYROSPLUS_CONFIG=path` as an env override.
 
 ## Where each setting goes
 
@@ -51,5 +51,5 @@ The CLI also accepts `LAZYROS_CONFIG=path` as an env override.
 
 ## Schema
 
-Defined as plain dataclasses in `src/lazyros/config.py`. Unknown keys are
+Defined as plain dataclasses in `src/lazyrosplus/config.py`. Unknown keys are
 silently ignored to keep older configs compatible.

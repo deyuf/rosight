@@ -1,8 +1,8 @@
-site_name: lazyros
+site_name: LazyrosPlus
 site_description: A lazygit-style terminal UI for ROS 2.
-site_url: https://deyuf.github.io/lazyros/
-repo_url: https://github.com/deyuf/lazyros
-repo_name: deyuf/lazyros
+site_url: https://deyuf.github.io/lazyrosplus/
+repo_url: https://github.com/deyuf/lazyrosplus
+repo_name: deyuf/lazyrosplus
 edit_uri: edit/main/docs/
 
 theme:

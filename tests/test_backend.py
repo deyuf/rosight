@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from lazyros.ros.backend import (
+from lazyrosplus.ros.backend import (
     NodeInfo,
     RosBackend,
     RosUnavailable,
