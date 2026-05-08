@@ -1,0 +1,68 @@
+/* lazyros — Textual stylesheet */
+
+Screen {
+    background: $background;
+    color: $text;
+}
+
+Header {
+    dock: top;
+    height: 1;
+    background: $primary 30%;
+    color: $text;
+}
+
+Footer {
+    dock: bottom;
+    background: $primary 20%;
+    color: $text;
+}
+
+#main-tabs {
+    dock: top;
+    height: 1;
+}
+
+TabbedContent {
+    height: 1fr;
+}
+
+TabPane {
+    padding: 0;
+    height: 1fr;
+}
+
+DataTable > .datatable--header {
+    background: $primary 40%;
+    color: $text;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $accent 35%;
+}
+
+Tree {
+    background: $surface;
+}
+
+Input {
+    background: $surface;
+    border: tall $primary 30%;
+}
+
+Input:focus {
+    border: tall $accent;
+}
+
+Static.dim {
+    color: $text-muted;
+}
+
+#detail-header {
+    text-style: bold;
+}
+
+ToastRack > Toast {
+    background: $primary 70%;
+}

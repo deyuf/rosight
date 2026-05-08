@@ -1,0 +1,233 @@
+"""Topics panel: list, echo, info, hz, bandwidth."""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+from rich.text import Text
+from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Vertical
+from textual.reactive import reactive
+from textual.widgets import DataTable, Input, Static
+
+from lazyros.utils.formatting import format_bytes, format_rate, short_type
+from lazyros.widgets.message_tree import MessageTree
+
+if TYPE_CHECKING:
+    from lazyros.app import LazyrosApp
+    from lazyros.ros.backend import RosBackend, Subscription, TopicInfo
+
+log = logging.getLogger(__name__)
+
+
+class TopicsPanel(Vertical):
+    """Two-column panel: topic table on the left, detail view on the right."""
+
+    BINDINGS = [
+        Binding("enter", "echo", "Echo"),
+        Binding("i", "info", "Info"),
+        Binding("h", "hz", "Hz"),
+        Binding("b", "bw", "BW"),
+        Binding("space", "toggle_pause", "Pause"),
+        Binding("P", "publish", "Publish"),
+        Binding("/", "filter", "Filter"),
+    ]
+
+    DEFAULT_CSS = """
+    TopicsPanel { layout: horizontal; }
+    TopicsPanel > #left { width: 45%; min-width: 40; border-right: solid $primary 30%; }
+    TopicsPanel > #right { width: 1fr; }
+    TopicsPanel #filter { dock: top; height: 1; }
+    TopicsPanel DataTable { height: 1fr; }
+    TopicsPanel #detail-header {
+        background: $boost;
+        color: $text;
+        padding: 0 1;
+        height: 1;
+    }
+    TopicsPanel MessageTree { height: 1fr; }
+    """
+
+    filter_text: reactive[str] = reactive("")
+    paused: reactive[bool] = reactive(False)
+    selected_topic: reactive[str | None] = reactive(None)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._topic_cache: list[TopicInfo] = []
+
+    # ---------------- compose ----------------
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="left"):
+            yield Input(placeholder="filter topics…", id="filter")
+            yield DataTable(id="topics-table", cursor_type="row", zebra_stripes=True)
+        with Vertical(id="right"):
+            yield Static("select a topic", id="detail-header")
+            yield MessageTree(id="msg-tree")
+
+    def on_mount(self) -> None:
+        table = self.query_one("#topics-table", DataTable)
+        table.add_columns("Topic", "Type", "Pub", "Sub", "Hz", "BW")
+        self._refresh_table()
+        self.set_interval(1.0, self._refresh_table)
+        self.set_interval(0.25, self._refresh_detail)
+
+    # ---------------- filter ----------------
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "filter":
+            self.filter_text = event.value
+            self._render_table()
+
+    def action_filter(self) -> None:
+        self.query_one("#filter", Input).focus()
+
+    # ---------------- table ----------------
+
+    @property
+    def app_(self) -> LazyrosApp:
+        return self.app  # type: ignore[return-value]
+
+    @property
+    def ros(self) -> RosBackend | None:
+        return getattr(self.app_, "ros", None)
+
+    def _refresh_table(self) -> None:
+        ros = self.ros
+        if ros is None or not ros.started:
+            return
+        try:
+            self._topic_cache = ros.list_topics()
+        except Exception:
+            log.exception("list_topics failed")
+            return
+        self._render_table()
+
+    def _render_table(self) -> None:
+        table = self.query_one("#topics-table", DataTable)
+        scroll_y = table.scroll_offset.y
+        table.clear()
+        ft = self.filter_text.lower().strip()
+        for ti in self._topic_cache:
+            if ft and ft not in ti.name.lower() and ft not in ti.primary_type.lower():
+                continue
+            sub = self.ros.get_subscription(ti.name) if self.ros else None
+            hz_str = "—"
+            bw_str = "—"
+            if sub is not None:
+                rs = sub.rate.sample()
+                bs = sub.bandwidth.sample()
+                hz_str = format_rate(rs.hz)
+                bw_str = format_bytes(bs.bytes_per_sec) + "/s"
+            row_style = "bold" if sub is not None else ""
+            table.add_row(
+                Text(ti.name, style=row_style),
+                Text(short_type(ti.primary_type), style="dim"),
+                str(ti.publisher_count),
+                str(ti.subscriber_count),
+                hz_str,
+                bw_str,
+                key=ti.name,
+            )
+        try:
+            table.scroll_to(y=scroll_y, animate=False)
+        except Exception:
+            pass
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.row_key is None:
+            return
+        self.selected_topic = str(event.row_key.value)
+
+    # ---------------- echo / detail ----------------
+
+    def action_echo(self) -> None:
+        topic = self.selected_topic
+        if not topic or not self.ros:
+            return
+        # find type
+        ti = next((t for t in self._topic_cache if t.name == topic), None)
+        if ti is None or not ti.types:
+            self.app_.push_status(f"no type for {topic!r}")
+            return
+        try:
+            self.ros.subscribe(topic, ti.primary_type)
+            self.app_.push_status(f"subscribed: {topic}")
+        except Exception as e:
+            log.exception("subscribe failed")
+            self.app_.push_status(f"subscribe failed: {e}")
+
+    def action_toggle_pause(self) -> None:
+        self.paused = not self.paused
+
+    def action_info(self) -> None:
+        topic = self.selected_topic
+        if not topic or not self.ros:
+            return
+        info_lines = [f"Topic: {topic}"]
+        ti = next((t for t in self._topic_cache if t.name == topic), None)
+        if ti:
+            info_lines.append(f"Types: {', '.join(ti.types)}")
+            info_lines.append(f"Publishers: {ti.publisher_count}")
+            info_lines.append(f"Subscribers: {ti.subscriber_count}")
+        try:
+            specs = self.ros.publisher_qos(topic)
+            for i, s in enumerate(specs):
+                info_lines.append(
+                    f"  pub[{i}] reliability={s.reliability.value} "
+                    f"durability={s.durability.value} depth={s.depth}"
+                )
+        except Exception:
+            pass
+        self.query_one("#detail-header", Static).update("\n".join(info_lines))
+
+    def action_hz(self) -> None:
+        # hz info is already shown in the table; ensure subscription so it ticks.
+        self.action_echo()
+
+    def action_bw(self) -> None:
+        self.action_echo()
+
+    def action_publish(self) -> None:  # pragma: no cover — interactive
+        self.app_.push_status("publish form not yet implemented in this build")
+
+    def _refresh_detail(self) -> None:
+        topic = self.selected_topic
+        ros = self.ros
+        if not topic or ros is None:
+            return
+        sub: Subscription | None = ros.get_subscription(topic)
+        header = self.query_one("#detail-header", Static)
+        tree = self.query_one("#msg-tree", MessageTree)
+        if sub is None:
+            header.update(f"{topic}\n[press enter to subscribe]")
+            tree.update_message(None)
+            return
+        rs = sub.rate.sample()
+        bs = sub.bandwidth.sample()
+        header.update(
+            Text.assemble(
+                (f"{topic}\n", "bold cyan"),
+                (f"type: {short_type(sub.type_name)}   ", "dim"),
+                (f"hz: {format_rate(rs.hz)}   ", "yellow"),
+                (f"bw: {format_bytes(bs.bytes_per_sec)}/s   ", "magenta"),
+                (f"jitter: {rs.jitter_ms:.1f}ms", "green"),
+            )
+        )
+        if not self.paused and sub.last_msg is not None:
+            tree.update_message(sub.last_msg)
+
+    # ---------------- bridge: forward field selection to plot ----------------
+
+    def on_message_tree_field_selected(
+        self,
+        event: MessageTree.FieldSelected,  # type: ignore[name-defined]
+    ) -> None:
+        if not event.is_numeric or not self.selected_topic:
+            self.app_.push_status(f"field {event.path} is not numeric — skipped")
+            return
+        self.app_.add_plot_series(self.selected_topic, event.path)
+        self.app_.push_status(f"plot += {self.selected_topic}/{event.path}")
