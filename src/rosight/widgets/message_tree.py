@@ -15,8 +15,8 @@ from textual.message import Message
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 
-from lazyrosplus.ros.introspection import FieldEntry, iter_fields
-from lazyrosplus.utils.formatting import format_value, short_type
+from rosight.ros.introspection import FieldEntry, iter_fields
+from rosight.utils.formatting import format_value, short_type
 
 
 class MessageTree(Tree[FieldEntry]):

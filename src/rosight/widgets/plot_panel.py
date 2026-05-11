@@ -13,14 +13,14 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import DataTable, Static
 
-from lazyrosplus.utils.datatable import fit_last_column_when_ready
-from lazyrosplus.utils.formatting import format_value
-from lazyrosplus.utils.path import get_value, parse_path
-from lazyrosplus.widgets.plot_view import PlotView
+from rosight.utils.datatable import fit_last_column_when_ready
+from rosight.utils.formatting import format_value
+from rosight.utils.path import get_value, parse_path
+from rosight.widgets.plot_view import PlotView
 
 if TYPE_CHECKING:
-    from lazyrosplus.app import LazyrosPlusApp
-    from lazyrosplus.ros.backend import RosBackend
+    from rosight.app import RosightApp
+    from rosight.ros.backend import RosBackend
 
 log = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class PlotPanel(Vertical):
         return getattr(self.app, "ros", None)
 
     @property
-    def app_(self) -> LazyrosPlusApp:
+    def app_(self) -> RosightApp:
         return self.app  # type: ignore[return-value]
 
     @property
@@ -175,7 +175,7 @@ class PlotPanel(Vertical):
         if not self._sources:
             self.app_.push_status("no series to save")
             return
-        out = Path.cwd() / f"lazyrosplus-{int(time.time())}.csv"
+        out = Path.cwd() / f"rosight-{int(time.time())}.csv"
         try:
             with out.open("w", newline="") as f:
                 w = csv.writer(f)

@@ -87,7 +87,7 @@ def fit_last_column(table: Any) -> None:
         col_count = len(cols)
         sum_other_content = sum((getattr(c, "content_width", 0) or 0) for c in cols[:-1])
         cache_key = (width, col_count, table.row_count, sum_other_content)
-        if getattr(table, "_lazyrosplus_fit_cache", None) == cache_key:
+        if getattr(table, "_rosight_fit_cache", None) == cache_key:
             return
 
         other = 0
@@ -105,7 +105,7 @@ def fit_last_column(table: Any) -> None:
         # room for a horizontal scrollbar.
         target = max(last_content, width - other - 2 * cell_pad)
         if last.width == target and not last.auto_width:
-            table._lazyrosplus_fit_cache = cache_key
+            table._rosight_fit_cache = cache_key
             return
         last.auto_width = False
         last.width = target
@@ -115,7 +115,7 @@ def fit_last_column(table: Any) -> None:
         except Exception:
             pass
         table.refresh(layout=True)
-        table._lazyrosplus_fit_cache = cache_key
+        table._rosight_fit_cache = cache_key
     except Exception:
         # Width tweaks are cosmetic — never crash the panel over them.
         pass
@@ -128,6 +128,6 @@ def invalidate_fit_cache(table: Any) -> None:
     doesn't, so we have to bust the cache explicitly.
     """
     try:
-        table._lazyrosplus_fit_cache = None
+        table._rosight_fit_cache = None
     except Exception:
         pass

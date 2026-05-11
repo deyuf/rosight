@@ -44,7 +44,7 @@ site/
 
 # Logs / runtime
 *.log
-.lazyros/
+.rosight/
 *.bag
 *.db3
 *.mcap

@@ -5,8 +5,8 @@ imports rclpy inside :class:`RosBackend.start` so the rest of the package
 (and the test suite) can run without a ROS 2 installation.
 """
 
-from lazyrosplus.ros.backend import RosBackend, RosUnavailable, ros_available
-from lazyrosplus.ros.stats import BandwidthMonitor, RateMonitor
+from rosight.ros.backend import RosBackend, RosUnavailable, ros_available
+from rosight.ros.stats import BandwidthMonitor, RateMonitor
 
 __all__ = [
     "BandwidthMonitor",

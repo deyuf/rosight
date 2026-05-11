@@ -3,7 +3,7 @@
 ## Launching
 
 ```bash
-lazyrosplus [--config PATH] [--domain-id N] [--no-ros] [--log-level LEVEL] [--log-file FILE]
+rosight [--config PATH] [--domain-id N] [--no-ros] [--log-level LEVEL] [--log-file FILE]
 ```
 
 Most-used flags:
@@ -122,6 +122,6 @@ panel notification appears on the right.
 
 ## Logging
 
-By default `lazyrosplus` does not write anything to stderr (it would corrupt
-the TUI). Use `--log-file /tmp/lazyrosplus.log` and tail in another terminal
+By default `rosight` does not write anything to stderr (it would corrupt
+the TUI). Use `--log-file /tmp/rosight.log` and tail in another terminal
 when debugging.

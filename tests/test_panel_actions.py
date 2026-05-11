@@ -14,13 +14,13 @@ pytest.importorskip("textual")
 
 from textual.widgets import Footer, Static, TabbedContent
 
-from lazyrosplus.app import LazyrosPlusApp
-from lazyrosplus.ros.backend import RosBackend
-from lazyrosplus.widgets.status_bar import StatusBar
+from rosight.app import RosightApp
+from rosight.ros.backend import RosBackend
+from rosight.widgets.status_bar import StatusBar
 
 
-def _app() -> LazyrosPlusApp:
-    return LazyrosPlusApp(ros=RosBackend())
+def _app() -> RosightApp:
+    return RosightApp(ros=RosBackend())
 
 
 def _topic(name: str, type_name: str = "std_msgs/msg/String", pubs: int = 1) -> SimpleNamespace:
@@ -66,7 +66,7 @@ async def test_status_bar_and_footer_do_not_overlap():
 
 @pytest.mark.asyncio
 async def test_topics_action_info_writes_to_info_area_and_survives_refresh():
-    from lazyrosplus.widgets.topics_panel import TopicsPanel
+    from rosight.widgets.topics_panel import TopicsPanel
 
     async with _app().run_test(headless=True, size=(160, 40)) as pilot:
         await pilot.pause()
@@ -101,7 +101,7 @@ async def test_topics_action_info_writes_to_info_area_and_survives_refresh():
 # ---------------------------------------------------------------------------
 
 
-def _capture_notifications(app: LazyrosPlusApp) -> list[tuple[tuple, dict]]:
+def _capture_notifications(app: RosightApp) -> list[tuple[tuple, dict]]:
     recorded: list[tuple[tuple, dict]] = []
     real_notify = app.notify
 
@@ -115,7 +115,7 @@ def _capture_notifications(app: LazyrosPlusApp) -> list[tuple[tuple, dict]]:
 
 @pytest.mark.asyncio
 async def test_services_action_call_notifies_with_selected_service():
-    from lazyrosplus.widgets.services_panel import ServicesPanel
+    from rosight.widgets.services_panel import ServicesPanel
 
     async with _app().run_test(headless=True, size=(120, 30)) as pilot:
         await pilot.pause()
@@ -137,7 +137,7 @@ async def test_services_action_call_notifies_with_selected_service():
 
 @pytest.mark.asyncio
 async def test_services_action_call_warns_when_nothing_selected():
-    from lazyrosplus.widgets.services_panel import ServicesPanel
+    from rosight.widgets.services_panel import ServicesPanel
 
     async with _app().run_test(headless=True, size=(120, 30)) as pilot:
         await pilot.pause()
@@ -155,7 +155,7 @@ async def test_services_action_call_warns_when_nothing_selected():
 
 @pytest.mark.asyncio
 async def test_topics_action_publish_notifies():
-    from lazyrosplus.widgets.topics_panel import TopicsPanel
+    from rosight.widgets.topics_panel import TopicsPanel
 
     async with _app().run_test(headless=True, size=(120, 30)) as pilot:
         await pilot.pause()
@@ -185,8 +185,8 @@ async def test_hidden_panel_refresh_skips_work():
     Before this fix every panel kept calling rclpy + rebuilding its table at
     1-2 Hz even when its tab wasn't visible, multiplied by 9 panels.
     """
-    from lazyrosplus.widgets.nodes_panel import NodesPanel
-    from lazyrosplus.widgets.topics_panel import TopicsPanel
+    from rosight.widgets.nodes_panel import NodesPanel
+    from rosight.widgets.topics_panel import TopicsPanel
 
     async with _app().run_test(headless=True, size=(160, 40)) as pilot:
         await pilot.pause()
@@ -230,8 +230,8 @@ async def test_p_on_numeric_field_adds_plot_series():
     latter so the bubbled message dropped on the floor and pressing `p` was
     silent.
     """
-    from lazyrosplus.widgets.message_tree import MessageTree
-    from lazyrosplus.widgets.topics_panel import TopicsPanel
+    from rosight.widgets.message_tree import MessageTree
+    from rosight.widgets.topics_panel import TopicsPanel
 
     # The class must be nested inside MessageTree for the dispatch to work.
     assert MessageTree.FieldSelected.handler_name == "on_message_tree_field_selected"
@@ -261,8 +261,8 @@ async def test_p_on_numeric_field_adds_plot_series():
 
 @pytest.mark.asyncio
 async def test_p_on_non_numeric_field_does_not_add():
-    from lazyrosplus.widgets.message_tree import MessageTree
-    from lazyrosplus.widgets.topics_panel import TopicsPanel
+    from rosight.widgets.message_tree import MessageTree
+    from rosight.widgets.topics_panel import TopicsPanel
 
     async with _app().run_test(headless=True, size=(160, 40)) as pilot:
         await pilot.pause()
@@ -297,7 +297,7 @@ async def test_enter_on_topic_row_subscribes():
     """
     from textual.widgets import DataTable
 
-    from lazyrosplus.widgets.topics_panel import TopicsPanel
+    from rosight.widgets.topics_panel import TopicsPanel
 
     async with _app().run_test(headless=True, size=(160, 40)) as pilot:
         await pilot.pause()
@@ -388,7 +388,7 @@ async def test_bags_recorder_subprocess_isolates_stdin():
     """
     import subprocess
 
-    from lazyrosplus.widgets.bags_panel import BagsPanel
+    from rosight.widgets.bags_panel import BagsPanel
 
     async with _app().run_test(headless=True, size=(160, 40)) as pilot:
         await pilot.pause()
@@ -436,7 +436,7 @@ async def test_bags_header_swaps_to_show_stop_shortcut():
 
     from textual.widgets import Static
 
-    from lazyrosplus.widgets.bags_panel import BagsPanel
+    from rosight.widgets.bags_panel import BagsPanel
 
     async with _app().run_test(headless=True, size=(160, 40)) as pilot:
         await pilot.pause()
@@ -476,7 +476,7 @@ async def test_bags_header_swaps_to_show_stop_shortcut():
 async def test_services_table_fills_panel_width_on_first_render():
     from textual.widgets import DataTable
 
-    from lazyrosplus.widgets.services_panel import ServicesPanel
+    from rosight.widgets.services_panel import ServicesPanel
 
     async with _app().run_test(headless=True, size=(160, 40)) as pilot:
         await pilot.pause()

@@ -1,4 +1,4 @@
-/* lazyrosplus — Textual stylesheet */
+/* rosight — Textual stylesheet */
 
 Screen {
     background: $background;

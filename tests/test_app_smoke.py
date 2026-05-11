@@ -10,13 +10,13 @@ import pytest
 
 pytest.importorskip("textual")
 
-from lazyrosplus.app import LazyrosPlusApp
-from lazyrosplus.ros.backend import RosBackend
+from rosight.app import RosightApp
+from rosight.ros.backend import RosBackend
 
 
-def _app() -> LazyrosPlusApp:
+def _app() -> RosightApp:
     ros = RosBackend()  # not started — backend_ok stays False
-    return LazyrosPlusApp(ros=ros)
+    return RosightApp(ros=ros)
 
 
 @pytest.mark.asyncio

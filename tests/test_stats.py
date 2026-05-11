@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lazyrosplus.ros.stats import BandwidthMonitor, RateMonitor, _heuristic_size
+from rosight.ros.stats import BandwidthMonitor, RateMonitor, _heuristic_size
 
 
 def test_rate_monitor_zero_when_empty():

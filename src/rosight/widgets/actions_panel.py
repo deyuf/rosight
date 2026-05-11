@@ -1,4 +1,4 @@
-"""Services panel: discover and call services."""
+"""Actions panel: list ROS 2 actions."""
 
 from __future__ import annotations
 
@@ -12,36 +12,34 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import (
+from rosight.utils.datatable import (
     current_row_key,
     fit_last_column,
     fit_last_column_when_ready,
     restore_cursor,
 )
-from lazyrosplus.utils.formatting import short_type
+from rosight.utils.formatting import short_type
 
 if TYPE_CHECKING:
-    from lazyrosplus.app import LazyrosPlusApp
-    from lazyrosplus.ros.backend import RosBackend, ServiceInfo
+    from rosight.ros.backend import ActionInfo, RosBackend
 
 log = logging.getLogger(__name__)
 
 
-class ServicesPanel(Vertical):
+class ActionsPanel(Vertical):
     BINDINGS = [
         Binding("enter", "show", "Inspect"),
-        Binding("c", "call", "Call"),
         Binding("/", "filter", "Filter"),
     ]
 
     DEFAULT_CSS = """
-    ServicesPanel { layout: horizontal; overflow: hidden; }
-    ServicesPanel > #left {
+    ActionsPanel { layout: horizontal; overflow: hidden; }
+    ActionsPanel > #left {
         width: 50%; min-width: 40;
         border-right: solid $primary 30%;
         overflow: hidden;
     }
-    ServicesPanel > #right { width: 1fr; padding: 0 1; overflow: hidden; }
+    ActionsPanel > #right { width: 1fr; padding: 0 1; overflow: hidden; }
     """
 
     filter_text: reactive[str] = reactive("")
@@ -49,33 +47,29 @@ class ServicesPanel(Vertical):
 
     def __init__(self) -> None:
         super().__init__()
-        self._svc_cache: list[ServiceInfo] = []
+        self._action_cache: list[ActionInfo] = []
 
     def compose(self) -> ComposeResult:
         with Vertical(id="left"):
-            yield Input(placeholder="filter services…", id="filter")
-            yield DataTable(id="srv-table", cursor_type="row", zebra_stripes=True)
+            yield Input(placeholder="filter actions…", id="filter")
+            yield DataTable(id="act-table", cursor_type="row", zebra_stripes=True)
         with Vertical(id="right"):
-            yield Static("Select a service", id="srv-header")
-            yield Static("", id="srv-detail")
+            yield Static("Select an action", id="act-header")
+            yield Static("", id="act-detail")
 
     def on_mount(self) -> None:
-        table = self.query_one("#srv-table", DataTable)
-        table.add_columns("Service", "Type")
+        table = self.query_one("#act-table", DataTable)
+        table.add_columns("Action", "Type")
         fit_last_column_when_ready(table)
         self._refresh()
         self.set_interval(2.0, self._refresh)
 
     def on_resize(self) -> None:
-        fit_last_column_when_ready(self.query_one("#srv-table", DataTable))
+        fit_last_column_when_ready(self.query_one("#act-table", DataTable))
 
     @property
     def ros(self) -> RosBackend | None:
         return getattr(self.app, "ros", None)
-
-    @property
-    def app_(self) -> LazyrosPlusApp:
-        return self.app  # type: ignore[return-value]
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter":
@@ -92,27 +86,27 @@ class ServicesPanel(Vertical):
         if ros is None or not ros.started:
             return
         try:
-            self._svc_cache = ros.list_services()
+            self._action_cache = ros.list_actions()
         except Exception:
-            log.exception("list_services failed")
+            log.exception("list_actions failed")
         self._render_table()
 
     def on_show(self) -> None:
         self._refresh()
 
     def _render_table(self) -> None:
-        table = self.query_one("#srv-table", DataTable)
+        table = self.query_one("#act-table", DataTable)
         scroll = table.scroll_offset
         selected_key = current_row_key(table)
         table.clear()
         ft = self.filter_text.lower().strip()
         new_idx = -1
         idx = 0
-        for s in self._svc_cache:
-            if ft and ft not in s.name.lower() and ft not in s.primary_type.lower():
+        for a in self._action_cache:
+            if ft and ft not in a.name.lower() and ft not in a.primary_type.lower():
                 continue
-            table.add_row(s.name, short_type(s.primary_type), key=s.name)
-            if s.name == selected_key:
+            table.add_row(a.name, short_type(a.primary_type), key=a.name)
+            if a.name == selected_key:
                 new_idx = idx
             idx += 1
         restore_cursor(table, selected_key, new_idx)
@@ -132,22 +126,11 @@ class ServicesPanel(Vertical):
         self.action_show()
 
     def action_show(self) -> None:
-        s = next((x for x in self._svc_cache if x.name == self.selected), None)
-        if s is None:
+        a = next((x for x in self._action_cache if x.name == self.selected), None)
+        if a is None:
             return
         text = Text()
-        text.append(f"{s.name}\n", style="bold cyan")
-        text.append(f"types: {', '.join(s.types)}\n", style="dim")
-        text.append("\nPress [c] to call. Auto-form coming soon.", style="italic")
-        self.query_one("#srv-detail", Static).update(text)
-
-    def action_call(self) -> None:
-        s = next((x for x in self._svc_cache if x.name == self.selected), None)
-        if s is None:
-            self.app_.notify("no service selected", severity="warning")
-            return
-        self.app_.notify(
-            f"call form for {s.name} not yet implemented\n(types: {', '.join(s.types)})",
-            title="Call",
-            severity="warning",
-        )
+        text.append(f"{a.name}\n", style="bold cyan")
+        text.append(f"types: {', '.join(a.types)}\n", style="dim")
+        text.append("\nGoal/feedback monitor coming soon.", style="italic")
+        self.query_one("#act-detail", Static).update(text)

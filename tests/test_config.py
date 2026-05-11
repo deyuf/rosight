@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from lazyrosplus.config import (
+from rosight.config import (
     Config,
     load_config,
     load_user_state,
@@ -16,7 +16,7 @@ from lazyrosplus.config import (
 
 def test_defaults():
     c = Config()
-    assert c.ui.theme == "lazyrosplus-dark"
+    assert c.ui.theme == "rosight-dark"
     assert c.plot.window_seconds == 30.0
     assert c.ros.queue_depth == 10
 
@@ -74,7 +74,7 @@ def test_invalid_toml_raises(tmp_path: Path):
 def test_user_state_roundtrip(tmp_path: Path):
     """Persisting + reloading user state should round-trip simple values."""
     state_file = tmp_path / "state.toml"
-    with patch("lazyrosplus.config.state_path", return_value=state_file):
+    with patch("rosight.config.state_path", return_value=state_file):
         assert load_user_state() == {}  # missing file is fine
         save_user_state({"theme": "textual-light", "vim_keys": True, "count": 7})
         assert state_file.exists()
@@ -87,7 +87,7 @@ def test_user_state_roundtrip(tmp_path: Path):
 def test_user_state_handles_unwritable_dir(tmp_path: Path):
     """save_user_state must never raise — it's best-effort."""
     bad_path = tmp_path / "nonexistent" / "ro" / "state.toml"
-    with patch("lazyrosplus.config.state_path", return_value=bad_path):
+    with patch("rosight.config.state_path", return_value=bad_path):
         # Make the parent unwritable to simulate failure.
         bad_path.parent.parent.mkdir(parents=True)
         bad_path.parent.parent.chmod(0o500)

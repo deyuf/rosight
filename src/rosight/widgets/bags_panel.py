@@ -14,10 +14,10 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import fit_last_column_when_ready
+from rosight.utils.datatable import fit_last_column_when_ready
 
 if TYPE_CHECKING:
-    from lazyrosplus.app import LazyrosPlusApp
+    from rosight.app import RosightApp
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class BagsPanel(Vertical):
         fit_last_column_when_ready(self.query_one("#procs", DataTable))
 
     @property
-    def app_(self) -> LazyrosPlusApp:
+    def app_(self) -> RosightApp:
         return self.app  # type: ignore[return-value]
 
     # ---- record / play -----------------------------------------------
@@ -108,7 +108,7 @@ class BagsPanel(Vertical):
             self.app_.notify("recording stopped", title="Bag")
             return
         args = self.query_one("#record-args", Input).value.split() or ["-a"]
-        out_dir = Path.cwd() / f"lazyrosplus-bag-{int(time.time())}"
+        out_dir = Path.cwd() / f"rosight-bag-{int(time.time())}"
         cmd = ["ros2", "bag", "record", "-o", str(out_dir), *args]
         try:
             self._record_proc = subprocess.Popen(cmd, **self._CHILD_KW)
