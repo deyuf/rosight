@@ -52,6 +52,13 @@ class TopicsPanel(Vertical):
         padding: 0 1;
         height: auto;
     }
+    TopicsPanel #info-area {
+        background: $surface;
+        color: $text;
+        padding: 0 1;
+        height: auto;
+        max-height: 10;
+    }
     TopicsPanel MessageTree { height: 1fr; }
     """
 
@@ -71,6 +78,7 @@ class TopicsPanel(Vertical):
             yield DataTable(id="topics-table", cursor_type="row", zebra_stripes=True)
         with Vertical(id="right"):
             yield Static("select a topic", id="detail-header")
+            yield Static("", id="info-area")
             yield MessageTree(id="msg-tree")
 
     def on_mount(self) -> None:
@@ -160,17 +168,22 @@ class TopicsPanel(Vertical):
         topic = self.selected_topic
         if not topic or not self.ros:
             return
-        # find type
         ti = next((t for t in self._topic_cache if t.name == topic), None)
         if ti is None or not ti.types:
-            self.app_.push_status(f"no type for {topic!r}")
+            self.app_.notify(f"no type for {topic!r}", severity="warning")
+            return
+        if self.ros.get_subscription(topic) is not None:
+            self.app_.notify(f"already subscribed: {topic}", title="Subscribe")
             return
         try:
             self.ros.subscribe(topic, ti.primary_type)
-            self.app_.push_status(f"subscribed: {topic}")
+            self.app_.notify(
+                f"subscribed: {topic}\ntype: {ti.primary_type}",
+                title="Subscribe",
+            )
         except Exception as e:
             log.exception("subscribe failed")
-            self.app_.push_status(f"subscribe failed: {e}")
+            self.app_.notify(f"subscribe failed: {e}", severity="error")
 
     def action_toggle_pause(self) -> None:
         self.paused = not self.paused
@@ -194,7 +207,10 @@ class TopicsPanel(Vertical):
                 )
         except Exception:
             pass
-        self.query_one("#detail-header", Static).update("\n".join(info_lines))
+        text = "\n".join(info_lines)
+        # Use a separate static so the realtime hz/bw refresh in
+        # `_refresh_detail` doesn't clobber it.
+        self.query_one("#info-area", Static).update(text)
 
     def action_hz(self) -> None:
         # hz info is already shown in the table; ensure subscription so it ticks.
@@ -204,7 +220,10 @@ class TopicsPanel(Vertical):
         self.action_echo()
 
     def action_publish(self) -> None:  # pragma: no cover — interactive
-        self.app_.push_status("publish form not yet implemented in this build")
+        self.app_.notify(
+            "publish form not yet implemented in this build",
+            severity="warning",
+        )
 
     def _refresh_detail(self) -> None:
         topic = self.selected_topic

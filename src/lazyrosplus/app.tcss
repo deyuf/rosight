@@ -12,8 +12,15 @@ Header {
     color: $text;
 }
 
-Footer {
+#bottom-bar {
     dock: bottom;
+    height: 2;
+    layout: vertical;
+}
+
+Footer {
+    dock: initial;
+    height: 1;
     background: $primary 20%;
     color: $text;
 }

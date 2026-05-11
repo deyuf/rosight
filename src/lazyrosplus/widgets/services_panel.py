@@ -117,5 +117,13 @@ class ServicesPanel(Vertical):
         text.append("\nPress [c] to call. Auto-form coming soon.", style="italic")
         self.query_one("#srv-detail", Static).update(text)
 
-    def action_call(self) -> None:  # pragma: no cover — interactive
-        self.app_.push_status("service-call form not yet implemented in this build")
+    def action_call(self) -> None:
+        s = next((x for x in self._svc_cache if x.name == self.selected), None)
+        if s is None:
+            self.app_.notify("no service selected", severity="warning")
+            return
+        self.app_.notify(
+            f"call form for {s.name} not yet implemented\n(types: {', '.join(s.types)})",
+            title="Call",
+            severity="warning",
+        )

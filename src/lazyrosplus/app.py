@@ -11,6 +11,7 @@ import logging
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
@@ -94,8 +95,9 @@ class LazyrosPlusApp(App[int]):
                 yield BagsPanel()
             with TabPane("Interfaces", id="interfaces"):
                 yield InterfacesPanel()
-        yield StatusBar(id="status")
-        yield Footer()
+        with Vertical(id="bottom-bar"):
+            yield StatusBar(id="status")
+            yield Footer()
 
     async def on_mount(self) -> None:
         # Try to start the ROS backend; downgrade to a banner on failure.
