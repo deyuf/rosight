@@ -52,8 +52,7 @@ async def test_status_bar_and_footer_do_not_overlap():
         sb = pilot.app.query_one(StatusBar)
         ft = pilot.app.query_one(Footer)
         assert sb.region.y != ft.region.y, (
-            f"StatusBar and Footer collide at y={sb.region.y}; "
-            f"got sb={sb.region}, ft={ft.region}"
+            f"StatusBar and Footer collide at y={sb.region.y}; got sb={sb.region}, ft={ft.region}"
         )
         # The status bar should sit immediately above the footer.
         assert sb.region.y + sb.region.height == ft.region.y

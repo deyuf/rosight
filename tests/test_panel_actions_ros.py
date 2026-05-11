@@ -98,9 +98,7 @@ async def test_topics_panel_discovers_running_publisher(_rclpy_publisher):
     app = await _running_app()
     async with app.run_test(headless=True, size=(160, 50)) as pilot:
         await pilot.pause()
-        found = await _wait_for(
-            lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics())
-        )
+        found = await _wait_for(lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics()))
         assert found, "publisher topic never showed up in list_topics()"
 
         # Force the panel to refresh and verify the row is present.
@@ -144,9 +142,7 @@ async def test_topics_info_shows_real_topic_info(_rclpy_publisher):
     app = await _running_app()
     async with app.run_test(headless=True, size=(160, 50)) as pilot:
         await pilot.pause()
-        await _wait_for(
-            lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics())
-        )
+        await _wait_for(lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics()))
         panel = pilot.app.query_one(TopicsPanel)
         panel._refresh_table()
         panel.selected_topic = _TOPIC_NAME
@@ -163,9 +159,7 @@ async def test_topics_bw_subscribes(_rclpy_publisher):
     app = await _running_app()
     async with app.run_test(headless=True, size=(160, 50)) as pilot:
         await pilot.pause()
-        await _wait_for(
-            lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics())
-        )
+        await _wait_for(lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics()))
         panel = pilot.app.query_one(TopicsPanel)
         panel._refresh_table()
         panel.selected_topic = _TOPIC_NAME
@@ -184,9 +178,7 @@ async def test_topics_hz_subscribes(_rclpy_publisher):
     app = await _running_app()
     async with app.run_test(headless=True, size=(160, 50)) as pilot:
         await pilot.pause()
-        await _wait_for(
-            lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics())
-        )
+        await _wait_for(lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics()))
         panel = pilot.app.query_one(TopicsPanel)
         panel._refresh_table()
         panel.selected_topic = _TOPIC_NAME
@@ -243,9 +235,7 @@ async def test_cursor_stays_on_selected_topic_across_refresh(_rclpy_publisher):
     app = await _running_app()
     async with app.run_test(headless=True, size=(160, 50)) as pilot:
         await pilot.pause()
-        await _wait_for(
-            lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics())
-        )
+        await _wait_for(lambda: any(t.name == _TOPIC_NAME for t in app.ros.list_topics()))
         panel = pilot.app.query_one(TopicsPanel)
         panel._refresh_table()
         await pilot.pause()
