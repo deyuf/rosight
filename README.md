@@ -29,19 +29,17 @@ Nine tabs, keyboard-driven, all on one screen:
 
 ### Screenshots
 
-<table>
-<tr>
-<td><a href="docs/screenshots/02-nodes.svg"><img src="docs/screenshots/02-nodes.svg" alt="Nodes tab"></a><br/><sub>Nodes (`2`)</sub></td>
-<td><a href="docs/screenshots/03-services.svg"><img src="docs/screenshots/03-services.svg" alt="Services tab"></a><br/><sub>Services (`3`)</sub></td>
-</tr>
-<tr>
-<td><a href="docs/screenshots/04-actions.svg"><img src="docs/screenshots/04-actions.svg" alt="Actions tab"></a><br/><sub>Actions (`4`)</sub></td>
-<td><a href="docs/screenshots/06-bags.svg"><img src="docs/screenshots/06-bags.svg" alt="Bags tab"></a><br/><sub>Bags (`8`) — recording state</sub></td>
-</tr>
-</table>
+![Nodes tab](docs/screenshots/02-nodes.svg)
+*Nodes (`2`)*
 
-> Screenshots are SVGs exported via Textual's pilot — regenerate them with
-> `python scripts/generate_screenshots.py` after a UI change.
+![Services tab](docs/screenshots/03-services.svg)
+*Services (`3`)*
+
+![Actions tab](docs/screenshots/04-actions.svg)
+*Actions (`4`)*
+
+![Bags tab](docs/screenshots/06-bags.svg)
+*Bags (`8`) — recording state*
 
 Cross-cutting features:
 
