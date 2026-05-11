@@ -140,6 +140,8 @@ class BagsPanel(Vertical):
             self.app_.push_status(f"info failed: {e}")
 
     def _refresh(self) -> None:
+        if self.region.width == 0:
+            return
         t = self.query_one("#procs", DataTable)
         t.clear()
         for label, proc in (("record", self._record_proc), ("play", self._play_proc)):

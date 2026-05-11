@@ -120,6 +120,12 @@ class PlotView(Static):
         self.set_interval(1 / 15, self._refresh)
 
     def _refresh(self) -> None:
+        # Don't burn 15 Hz worth of plotext rendering when the Plot tab is
+        # hidden. We deliberately still let `PlotPanel._sample` collect
+        # points in the background so the chart has history when the user
+        # comes back.
+        if self.region.width == 0:
+            return
         now = time.monotonic()
         if now - self._last_render < (0.5 if self.paused else 1 / 15):
             return

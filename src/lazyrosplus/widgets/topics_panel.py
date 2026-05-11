@@ -121,6 +121,11 @@ class TopicsPanel(Vertical):
         return getattr(self.app_, "ros", None)
 
     def _refresh_table(self) -> None:
+        # Skip when the tab is hidden — every panel's set_interval keeps
+        # firing in the background otherwise, and the 1 s rclpy round-trip
+        # adds up across all panels.
+        if self.region.width == 0:
+            return
         ros = self.ros
         if ros is None or not ros.started:
             return
@@ -130,6 +135,11 @@ class TopicsPanel(Vertical):
             log.exception("list_topics failed")
             return
         self._render_table()
+
+    def on_show(self) -> None:
+        # Refresh immediately on tab switch so the user doesn't have to
+        # wait up to a full interval for fresh data.
+        self._refresh_table()
 
     def _render_table(self) -> None:
         table = self.query_one("#topics-table", DataTable)
@@ -244,6 +254,10 @@ class TopicsPanel(Vertical):
         )
 
     def _refresh_detail(self) -> None:
+        # 4 Hz timer — silently no-op when the tab is hidden so we don't
+        # burn CPU walking the message tree for a panel nobody is looking at.
+        if self.region.width == 0:
+            return
         topic = self.selected_topic
         ros = self.ros
         if not topic or ros is None:

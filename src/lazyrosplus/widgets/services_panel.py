@@ -86,6 +86,8 @@ class ServicesPanel(Vertical):
         self.query_one("#filter", Input).focus()
 
     def _refresh(self) -> None:
+        if self.region.width == 0:
+            return
         ros = self.ros
         if ros is None or not ros.started:
             return
@@ -94,6 +96,9 @@ class ServicesPanel(Vertical):
         except Exception:
             log.exception("list_services failed")
         self._render_table()
+
+    def on_show(self) -> None:
+        self._refresh()
 
     def _render_table(self) -> None:
         table = self.query_one("#srv-table", DataTable)

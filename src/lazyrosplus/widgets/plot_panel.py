@@ -123,6 +123,8 @@ class PlotPanel(Vertical):
                 self.plot.push(label, float(value), ts)
 
     def _refresh_table(self) -> None:
+        if self.region.width == 0:
+            return
         st = self.query_one("#side-table", DataTable)
         st.clear()
         for label in self._sources:

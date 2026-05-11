@@ -100,6 +100,8 @@ class TfPanel(Vertical):
         self._update_tree()
 
     def _update_tree(self) -> None:
+        if self.region.width == 0:
+            return
         self._ensure_subscribed()
         tree = self.query_one("#tf-tree", Tree)
         tree.clear()

@@ -67,6 +67,9 @@ class ParamsPanel(Vertical):
         fit_last_column_when_ready(self.query_one("#nodes-table", DataTable))
         fit_last_column_when_ready(self.query_one("#params-table", DataTable))
 
+    def on_show(self) -> None:
+        self._refresh_nodes()
+
     @property
     def ros(self) -> RosBackend | None:
         return getattr(self.app, "ros", None)
@@ -84,6 +87,8 @@ class ParamsPanel(Vertical):
         self.query_one("#filter", Input).focus()
 
     def _refresh_nodes(self) -> None:
+        if self.region.width == 0:
+            return
         ros = self.ros
         if ros is None or not ros.started:
             return
