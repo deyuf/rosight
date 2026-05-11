@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Rosight logo">
+  <title>Rosight</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a237e"/>
+      <stop offset="100%" stop-color="#283593"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#26c6da"/>
+      <stop offset="100%" stop-color="#00acc1"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" ry="56" fill="url(#bg)"/>
+
+  <circle cx="128" cy="128" r="84" fill="none" stroke="url(#ring)" stroke-width="6"/>
+  <circle cx="128" cy="128" r="60" fill="none" stroke="#26c6da" stroke-width="2" opacity="0.45"/>
+
+  <line x1="128" y1="24"  x2="128" y2="56"  stroke="#26c6da" stroke-width="6" stroke-linecap="round"/>
+  <line x1="128" y1="200" x2="128" y2="232" stroke="#26c6da" stroke-width="6" stroke-linecap="round"/>
+  <line x1="24"  y1="128" x2="56"  y2="128" stroke="#26c6da" stroke-width="6" stroke-linecap="round"/>
+  <line x1="200" y1="128" x2="232" y2="128" stroke="#26c6da" stroke-width="6" stroke-linecap="round"/>
+
+  <polyline points="98,96 134,128 98,160" fill="none" stroke="#e8eaf6" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="142" y="150" width="32" height="10" rx="5" ry="5" fill="#e8eaf6"/>
+</svg>
