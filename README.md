@@ -9,22 +9,7 @@ Browse the live ROS 2 graph — messages, nodes, services, actions, parameters,
 TF, bags, interfaces — and live-plot any numeric field, all from one screen
 without a mouse. Built for SSH, tmux, robot consoles.
 
-```
-┌─Messages────────────────────────┬─/odom─────────────────────────────────────┐
-│ /odom            nav…/Odometry  │ hz: 49.8 Hz   bw: 31.2 KB/s   jitter: 0.3 │
-│ /scan            sen…/LaserScan │ ▾ pose                                    │
-│ /tf              tf2…/TFMessage │   ▾ pose                                  │
-│ /cmd_vel         geo…/Twist     │     ▸ position                            │
-│ /joint_states    sen…/JointSt…  │     ▸ orientation                         │
-│ ...                             │ ▾ twist                                   │
-│                                 │   ▾ twist                                 │
-│                                 │     linear  Vector3                       │
-│                                 │       x  0.182  : float64        <-       │
-│                                 │       y  0.0    : float64                 │
-└─────────────────────────────────┴───────────────────────────────────────────┘
- ● ros DOMAIN_ID=0  topics=42  nodes=11  srv=63  act=4  subs=3
-                                                       [?] help  [:] command
-```
+![Messages tab](docs/screenshots/01-messages.svg)
 
 ## What's inside
 
@@ -41,6 +26,22 @@ Nine tabs, keyboard-driven, all on one screen:
 | `7` | **TF** | Auto-built frame tree from `/tf` and `/tf_static`. |
 | `8` | **Bags** | `ros2 bag record` / `play` / `info`. The header tells you which key stops the recording while it's running. |
 | `9` | **Interfaces** | Browse `msg` / `srv` / `action` definitions of every interface package on the system. |
+
+### Screenshots
+
+<table>
+<tr>
+<td><a href="docs/screenshots/02-nodes.svg"><img src="docs/screenshots/02-nodes.svg" alt="Nodes tab"></a><br/><sub>Nodes (`2`)</sub></td>
+<td><a href="docs/screenshots/03-services.svg"><img src="docs/screenshots/03-services.svg" alt="Services tab"></a><br/><sub>Services (`3`)</sub></td>
+</tr>
+<tr>
+<td><a href="docs/screenshots/04-actions.svg"><img src="docs/screenshots/04-actions.svg" alt="Actions tab"></a><br/><sub>Actions (`4`)</sub></td>
+<td><a href="docs/screenshots/06-bags.svg"><img src="docs/screenshots/06-bags.svg" alt="Bags tab"></a><br/><sub>Bags (`8`) — recording state</sub></td>
+</tr>
+</table>
+
+> Screenshots are SVGs exported via Textual's pilot — regenerate them with
+> `python scripts/generate_screenshots.py` after a UI change.
 
 Cross-cutting features:
 

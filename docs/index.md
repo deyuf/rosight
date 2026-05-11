@@ -6,6 +6,8 @@ Browse the live ROS 2 graph — messages, nodes, services, actions, parameters,
 TF, bags, interfaces — and live-plot any numeric field, all from one screen
 without a mouse. Built for SSH, tmux, robot consoles.
 
+![Messages tab](screenshots/01-messages.svg)
+
 ## What's inside
 
 Nine tabs, one screen, all keyboard:
