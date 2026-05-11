@@ -97,7 +97,13 @@ def fit_last_column(table: Any) -> None:
             other += content + 2 * cell_pad
         last = cols[-1]
         last_content = getattr(last, "content_width", 0) or 0
-        target = max(last_content, width - other - 2 * cell_pad - 1)
+        # Match the table region exactly. An earlier "-1" left a 1-cell strip
+        # on the right of every row where the row background still painted
+        # (panel bg / zebra stripe) but the cursor cell highlight didn't —
+        # so the orange cursor bar looked shorter than the row's bg bar.
+        # Panels already have `overflow: hidden` so we don't need to leave
+        # room for a horizontal scrollbar.
+        target = max(last_content, width - other - 2 * cell_pad)
         if last.width == target and not last.auto_width:
             table._lazyrosplus_fit_cache = cache_key
             return

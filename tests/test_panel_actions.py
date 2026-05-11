@@ -397,9 +397,10 @@ async def test_services_table_fills_panel_width_on_first_render():
         await pilot.pause()
         table = pilot.app.query_one("#srv-table", DataTable)
         gap = table.region.width - table.virtual_size.width
-        # Within 2 cells of the visible region; a perfect zero gap is fragile
-        # (depends on whether a scrollbar slot is reserved).
-        assert -2 <= gap <= 2, (
+        # Must be exactly zero — even a 1-cell gap shows up as an obvious
+        # strip where the cursor's orange highlight stops short of the
+        # row's full-width background.
+        assert gap == 0, (
             f"row highlight will not span full width: region={table.region.width} "
             f"virtual={table.virtual_size.width}"
         )
