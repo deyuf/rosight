@@ -53,6 +53,15 @@ HELP_TEXT = """\
 | `R` | start/stop record |
 | `p` | play |
 | `i` | bag info |
+
+## Command palette ( `:` )
+| command | action |
+|---------|--------|
+| `topic <filter>` | jump to Messages and set filter |
+| `plot <topic> <field>` | add series to plot |
+| `record` | jump to Bags |
+| `domain <N>` | restart rclpy on ROS_DOMAIN_ID `N` (0..232) |
+| `quit` | exit the app |
 """
 
 

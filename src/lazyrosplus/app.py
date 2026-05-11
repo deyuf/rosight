@@ -170,6 +170,7 @@ class LazyrosPlusApp(App[int]):
     def _refresh_status(self) -> None:
         bar = self.query_one("#status", StatusBar)
         bar.backend_ok = self.backend_ok and self.ros.started
+        bar.domain_id = self.ros.domain_id
         if not self.ros.started:
             return
         try:
@@ -208,5 +209,40 @@ class LazyrosPlusApp(App[int]):
             self.action_tab("bags")
         elif cmd == "help":
             self.action_help()
+        elif cmd == "domain" and args:
+            self._switch_domain(args[0])
         else:
             self.push_status(f"unknown command: {raw}")
+
+    def _switch_domain(self, raw_id: str) -> None:
+        """Re-init the rclpy backend on a new ROS_DOMAIN_ID.
+
+        Tears down the executor + node + context and reconnects on the
+        target domain. Any subscriptions are lost — panels rediscover and
+        the user can re-subscribe.
+        """
+        try:
+            new_id = int(raw_id)
+        except ValueError:
+            self.notify(f"invalid domain id: {raw_id!r}", severity="warning", title="Domain")
+            return
+        if not 0 <= new_id <= 232:  # ROS_DOMAIN_ID range
+            self.notify(
+                f"domain id {new_id} outside valid range 0..232",
+                severity="warning",
+                title="Domain",
+            )
+            return
+        try:
+            self.ros.set_domain_id(new_id)
+            self.backend_ok = self.ros.started
+            self.notify(
+                f"now on ROS_DOMAIN_ID={new_id}\n(subscriptions cleared)",
+                title="Domain",
+            )
+        except RosUnavailable as e:
+            self.backend_ok = False
+            self.notify(str(e), title="ROS 2 unavailable", severity="warning")
+        except Exception as e:
+            log.exception("set_domain_id failed")
+            self.notify(f"failed to switch domain: {e}", severity="error")

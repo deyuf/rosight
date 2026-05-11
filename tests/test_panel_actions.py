@@ -223,6 +223,46 @@ async def test_hidden_panel_refresh_skips_work():
 
 
 @pytest.mark.asyncio
+async def test_domain_command_invokes_set_domain_id():
+    """`:domain N` should call RosBackend.set_domain_id(N) and notify the user."""
+    async with _app().run_test(headless=True, size=(120, 30)) as pilot:
+        await pilot.pause()
+        calls: list[int | None] = []
+
+        def fake_set(new_id: int | None) -> None:
+            calls.append(new_id)
+
+        pilot.app.ros.set_domain_id = fake_set  # type: ignore[assignment]
+        notes = _capture_notifications(pilot.app)
+        pilot.app._on_command_submitted("domain 7")
+        await pilot.pause()
+        assert calls == [7]
+        body = " ".join(str(a[0]) for a, _ in notes)
+        assert "ROS_DOMAIN_ID=7" in body
+
+
+@pytest.mark.asyncio
+async def test_domain_command_rejects_garbage():
+    """Non-integer / out-of-range domain ids should warn, not crash."""
+    async with _app().run_test(headless=True, size=(120, 30)) as pilot:
+        await pilot.pause()
+        called = {"n": 0}
+
+        def fake_set(_new_id: int | None) -> None:
+            called["n"] += 1
+
+        pilot.app.ros.set_domain_id = fake_set  # type: ignore[assignment]
+        notes = _capture_notifications(pilot.app)
+        pilot.app._on_command_submitted("domain abc")
+        pilot.app._on_command_submitted("domain 999")
+        await pilot.pause()
+        assert called["n"] == 0
+        body = " ".join(str(a[0]) for a, _ in notes)
+        assert "invalid" in body
+        assert "outside valid range" in body
+
+
+@pytest.mark.asyncio
 async def test_services_table_fills_panel_width_on_first_render():
     from textual.widgets import DataTable
 

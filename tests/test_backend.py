@@ -82,6 +82,18 @@ def test_require_node_raises_when_unstarted():
         b._require_node()
 
 
+def test_set_domain_id_updates_attr_when_not_started():
+    """Without rclpy, set_domain_id should just update the attr — we exercise
+    the unstarted branch (no stop/start cycle) so the test runs in any env."""
+    b = RosBackend(domain_id=0)
+    assert b.domain_id == 0
+    b.set_domain_id(7)
+    assert b.domain_id == 7
+    # Calling again is fine.
+    b.set_domain_id(None)
+    assert b.domain_id is None
+
+
 def test_node_info_keys_present():
     b = _backend_with_mock_node()
     b._node.get_publisher_names_and_types_by_node.return_value = [("/foo", ["std_msgs/msg/String"])]

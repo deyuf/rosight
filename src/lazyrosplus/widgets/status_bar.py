@@ -26,6 +26,11 @@ class StatusBar(Static):
     services: reactive[int] = reactive(0)
     actions: reactive[int] = reactive(0)
     subs: reactive[int] = reactive(0)
+    # ``None`` means "show whatever the env var says" — used before the
+    # backend reports an effective domain. The app pushes the real value
+    # from ``RosBackend.domain_id`` once the backend is up so the bar
+    # reflects ``:domain N`` runtime switches.
+    domain_id: reactive[int | None] = reactive(None)
     backend_ok: reactive[bool] = reactive(False)
     message: reactive[str] = reactive("")
 
@@ -37,7 +42,11 @@ class StatusBar(Static):
         else:
             text.append(" ● ", style="bold red")
             text.append("no ros ", style="dim")
-        text.append(f"DOMAIN_ID={os.environ.get('ROS_DOMAIN_ID', '0')}  ", style="dim")
+        if self.domain_id is not None:
+            shown = str(self.domain_id)
+        else:
+            shown = os.environ.get("ROS_DOMAIN_ID", "0")
+        text.append(f"DOMAIN_ID={shown}  ", style="dim")
         text.append(f"topics={self.topics} ", style="cyan")
         text.append(f"nodes={self.nodes} ", style="magenta")
         text.append(f"srv={self.services} ", style="yellow")
