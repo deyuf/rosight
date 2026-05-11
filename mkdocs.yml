@@ -1,0 +1,57 @@
+site_name: Rosight
+site_description: A lazygit-style terminal UI for ROS 2.
+site_url: https://deyuf.github.io/rosight/
+repo_url: https://github.com/deyuf/rosight
+repo_name: deyuf/rosight
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: switch to light
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: switch to dark
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: installation.md
+      - Usage: usage.md
+      - Configuration: configuration.md
+      - Keybindings: keybindings.md
+  - Features:
+      - Plotting: plotting.md
+  - Reference:
+      - Architecture: architecture.md
+      - Development: development.md
+      - FAQ: faq.md

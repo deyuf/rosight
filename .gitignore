@@ -1,0 +1,53 @@
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+wheels/
+.eggs/
+pip-wheel-metadata/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.python-version
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.hypothesis/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Site
+site/
+
+# Logs / runtime
+*.log
+.rosight/
+*.bag
+*.db3
+*.mcap
+
+# OS
+Thumbs.db
