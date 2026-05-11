@@ -12,6 +12,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
+from lazyrosplus.utils.datatable import current_row_key, restore_cursor
 from lazyrosplus.utils.formatting import format_bytes, format_rate, short_type
 from lazyrosplus.widgets.message_tree import MessageTree
 
@@ -36,16 +37,20 @@ class TopicsPanel(Vertical):
     ]
 
     DEFAULT_CSS = """
-    TopicsPanel { layout: horizontal; }
-    TopicsPanel > #left { width: 45%; min-width: 40; border-right: solid $primary 30%; }
-    TopicsPanel > #right { width: 1fr; }
-    TopicsPanel #filter { dock: top; height: 1; }
+    TopicsPanel { layout: horizontal; overflow: hidden; }
+    TopicsPanel > #left {
+        width: 45%; min-width: 40;
+        border-right: solid $primary 30%;
+        overflow: hidden;
+    }
+    TopicsPanel > #right { width: 1fr; overflow: hidden; }
+    TopicsPanel #filter { dock: top; height: 3; }
     TopicsPanel DataTable { height: 1fr; }
     TopicsPanel #detail-header {
         background: $boost;
         color: $text;
         padding: 0 1;
-        height: 1;
+        height: auto;
     }
     TopicsPanel MessageTree { height: 1fr; }
     """
@@ -109,8 +114,11 @@ class TopicsPanel(Vertical):
     def _render_table(self) -> None:
         table = self.query_one("#topics-table", DataTable)
         scroll_y = table.scroll_offset.y
+        selected_key = current_row_key(table)
         table.clear()
         ft = self.filter_text.lower().strip()
+        new_idx = -1
+        idx = 0
         for ti in self._topic_cache:
             if ft and ft not in ti.name.lower() and ft not in ti.primary_type.lower():
                 continue
@@ -132,6 +140,10 @@ class TopicsPanel(Vertical):
                 bw_str,
                 key=ti.name,
             )
+            if ti.name == selected_key:
+                new_idx = idx
+            idx += 1
+        restore_cursor(table, selected_key, new_idx)
         try:
             table.scroll_to(y=scroll_y, animate=False)
         except Exception:

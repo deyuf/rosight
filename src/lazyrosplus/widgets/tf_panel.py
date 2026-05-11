@@ -25,9 +25,13 @@ class TfPanel(Vertical):
     ]
 
     DEFAULT_CSS = """
-    TfPanel { layout: horizontal; }
-    TfPanel > #left { width: 50%; min-width: 30; border-right: solid $primary 30%; }
-    TfPanel > #right { width: 1fr; padding: 0 1; }
+    TfPanel { layout: horizontal; overflow: hidden; }
+    TfPanel > #left {
+        width: 50%; min-width: 30;
+        border-right: solid $primary 30%;
+        overflow: hidden;
+    }
+    TfPanel > #right { width: 1fr; padding: 0 1; overflow: hidden; }
     TfPanel Tree { height: 1fr; }
     """
 

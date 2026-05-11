@@ -38,9 +38,13 @@ class PlotPanel(Vertical):
     ]
 
     DEFAULT_CSS = """
-    PlotPanel { layout: horizontal; }
-    PlotPanel > #plot-area { width: 1fr; }
-    PlotPanel > #side { width: 30%; min-width: 30; border-left: solid $primary 30%; }
+    PlotPanel { layout: horizontal; overflow: hidden; }
+    PlotPanel > #plot-area { width: 1fr; overflow: hidden; }
+    PlotPanel > #side {
+        width: 30%; min-width: 30;
+        border-left: solid $primary 30%;
+        overflow: hidden;
+    }
     PlotPanel #side-header { background: $boost; padding: 0 1; }
     PlotPanel PlotView { height: 1fr; }
     PlotPanel #side-table { height: 1fr; }
