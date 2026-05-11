@@ -13,7 +13,12 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import current_row_key, restore_cursor
+from lazyrosplus.utils.datatable import (
+    current_row_key,
+    fit_last_column,
+    fit_last_column_when_ready,
+    restore_cursor,
+)
 
 if TYPE_CHECKING:
     pass
@@ -53,8 +58,12 @@ class InterfacesPanel(Vertical):
     def on_mount(self) -> None:
         t = self.query_one("#iface-table", DataTable)
         t.add_columns("Type", "Kind")
+        fit_last_column_when_ready(t)
         self._discover()
         self._render_table()
+
+    def on_resize(self) -> None:
+        fit_last_column_when_ready(self.query_one("#iface-table", DataTable))
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter":
@@ -120,6 +129,7 @@ class InterfacesPanel(Vertical):
             t.scroll_to(x=scroll.x, y=scroll.y, animate=False)
         except Exception:
             pass
+        fit_last_column(t)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:

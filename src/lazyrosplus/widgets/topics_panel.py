@@ -12,7 +12,12 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import current_row_key, restore_cursor
+from lazyrosplus.utils.datatable import (
+    current_row_key,
+    fit_last_column,
+    fit_last_column_when_ready,
+    restore_cursor,
+)
 from lazyrosplus.utils.formatting import format_bytes, format_rate, short_type
 from lazyrosplus.widgets.message_tree import MessageTree
 
@@ -87,9 +92,13 @@ class TopicsPanel(Vertical):
     def on_mount(self) -> None:
         table = self.query_one("#topics-table", DataTable)
         table.add_columns("Topic", "Type", "Pub", "Sub", "Hz", "BW")
+        fit_last_column_when_ready(table)
         self._refresh_table()
         self.set_interval(1.0, self._refresh_table)
         self.set_interval(0.25, self._refresh_detail)
+
+    def on_resize(self) -> None:
+        fit_last_column_when_ready(self.query_one("#topics-table", DataTable))
 
     # ---------------- filter ----------------
 
@@ -112,6 +121,11 @@ class TopicsPanel(Vertical):
         return getattr(self.app_, "ros", None)
 
     def _refresh_table(self) -> None:
+        # Skip when the tab is hidden — every panel's set_interval keeps
+        # firing in the background otherwise, and the 1 s rclpy round-trip
+        # adds up across all panels.
+        if self.region.width == 0:
+            return
         ros = self.ros
         if ros is None or not ros.started:
             return
@@ -121,6 +135,11 @@ class TopicsPanel(Vertical):
             log.exception("list_topics failed")
             return
         self._render_table()
+
+    def on_show(self) -> None:
+        # Refresh immediately on tab switch so the user doesn't have to
+        # wait up to a full interval for fresh data.
+        self._refresh_table()
 
     def _render_table(self) -> None:
         table = self.query_one("#topics-table", DataTable)
@@ -164,6 +183,7 @@ class TopicsPanel(Vertical):
             table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
         except Exception:
             pass
+        fit_last_column(table)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:
@@ -234,6 +254,10 @@ class TopicsPanel(Vertical):
         )
 
     def _refresh_detail(self) -> None:
+        # 4 Hz timer — silently no-op when the tab is hidden so we don't
+        # burn CPU walking the message tree for a panel nobody is looking at.
+        if self.region.width == 0:
+            return
         topic = self.selected_topic
         ros = self.ros
         if not topic or ros is None:

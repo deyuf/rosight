@@ -14,6 +14,8 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
+from lazyrosplus.utils.datatable import fit_last_column_when_ready
+
 if TYPE_CHECKING:
     from lazyrosplus.app import LazyrosPlusApp
 
@@ -68,7 +70,11 @@ class BagsPanel(Vertical):
     def on_mount(self) -> None:
         t = self.query_one("#procs", DataTable)
         t.add_columns("Process", "PID", "State", "Started")
+        fit_last_column_when_ready(t)
         self.set_interval(1.0, self._refresh)
+
+    def on_resize(self) -> None:
+        fit_last_column_when_ready(self.query_one("#procs", DataTable))
 
     @property
     def app_(self) -> LazyrosPlusApp:
@@ -134,6 +140,8 @@ class BagsPanel(Vertical):
             self.app_.push_status(f"info failed: {e}")
 
     def _refresh(self) -> None:
+        if self.region.width == 0:
+            return
         t = self.query_one("#procs", DataTable)
         t.clear()
         for label, proc in (("record", self._record_proc), ("play", self._play_proc)):

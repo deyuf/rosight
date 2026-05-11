@@ -168,3 +168,80 @@ async def test_topics_action_publish_notifies():
         panel.action_publish()
         await pilot.pause()
         assert any("publish" in str(a[0]).lower() for a, _ in notes)
+
+
+# ---------------------------------------------------------------------------
+# Cursor-row highlight bar should span the full visible width of the table,
+# not just sum-of-content-widths. Before fit_last_column the highlight ended
+# wherever the last cell's text ended, leaving a misaligned strip on the
+# right of the panel.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_hidden_panel_refresh_skips_work():
+    """Background panels' set_interval should no-op when their tab is hidden.
+
+    Before this fix every panel kept calling rclpy + rebuilding its table at
+    1-2 Hz even when its tab wasn't visible, multiplied by 9 panels.
+    """
+    from lazyrosplus.widgets.nodes_panel import NodesPanel
+    from lazyrosplus.widgets.topics_panel import TopicsPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        # Default active tab is Messages — NodesPanel must be hidden.
+        nodes = pilot.app.query_one(NodesPanel)
+        topics = pilot.app.query_one(TopicsPanel)
+        assert nodes.region.width == 0, "expected NodesPanel to be hidden"
+        assert topics.region.width > 0, "expected TopicsPanel to be visible"
+
+        # Calling _refresh on a hidden panel must be effectively free —
+        # don't even touch the (potentially unstarted) backend.
+        called = {"list_nodes": 0}
+
+        class _Spy:
+            started = True
+
+            def list_nodes(self):
+                called["list_nodes"] += 1
+                return []
+
+        # Swap in a counting backend; _refresh would normally hit it.
+        nodes_panel_app = nodes.app
+        original_ros = nodes_panel_app.ros
+        nodes_panel_app.ros = _Spy()  # type: ignore[assignment]
+        try:
+            for _ in range(20):
+                nodes._refresh()
+            assert called["list_nodes"] == 0, (
+                f"hidden panel should not query the backend, but called list_nodes "
+                f"{called['list_nodes']} times"
+            )
+        finally:
+            nodes_panel_app.ros = original_ros  # type: ignore[assignment]
+
+
+@pytest.mark.asyncio
+async def test_services_table_fills_panel_width_on_first_render():
+    from textual.widgets import DataTable
+
+    from lazyrosplus.widgets.services_panel import ServicesPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "services"
+        for _ in range(3):
+            await pilot.pause()
+        panel = pilot.app.query_one(ServicesPanel)
+        panel._svc_cache = [_service(f"/controller/foo{i}/call_service", "") for i in range(5)]
+        panel._render_table()
+        await pilot.pause()
+        table = pilot.app.query_one("#srv-table", DataTable)
+        gap = table.region.width - table.virtual_size.width
+        # Within 2 cells of the visible region; a perfect zero gap is fragile
+        # (depends on whether a scrollbar slot is reserved).
+        assert -2 <= gap <= 2, (
+            f"row highlight will not span full width: region={table.region.width} "
+            f"virtual={table.virtual_size.width}"
+        )
