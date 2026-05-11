@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/assets/logo.png" width="160" alt="Rosight logo"/>
+</p>
+
 # Rosight
 
 [![PyPI](https://img.shields.io/pypi/v/rosight.svg)](https://pypi.org/project/rosight/)
