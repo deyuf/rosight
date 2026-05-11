@@ -12,6 +12,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
+from lazyrosplus.utils.datatable import current_row_key, restore_cursor
 from lazyrosplus.utils.formatting import short_type
 
 if TYPE_CHECKING:
@@ -29,9 +30,13 @@ class ServicesPanel(Vertical):
     ]
 
     DEFAULT_CSS = """
-    ServicesPanel { layout: horizontal; }
-    ServicesPanel > #left { width: 50%; min-width: 40; border-right: solid $primary 30%; }
-    ServicesPanel > #right { width: 1fr; padding: 0 1; }
+    ServicesPanel { layout: horizontal; overflow: hidden; }
+    ServicesPanel > #left {
+        width: 50%; min-width: 40;
+        border-right: solid $primary 30%;
+        overflow: hidden;
+    }
+    ServicesPanel > #right { width: 1fr; padding: 0 1; overflow: hidden; }
     """
 
     filter_text: reactive[str] = reactive("")
@@ -83,12 +88,19 @@ class ServicesPanel(Vertical):
 
     def _render_table(self) -> None:
         table = self.query_one("#srv-table", DataTable)
+        selected_key = current_row_key(table)
         table.clear()
         ft = self.filter_text.lower().strip()
+        new_idx = -1
+        idx = 0
         for s in self._svc_cache:
             if ft and ft not in s.name.lower() and ft not in s.primary_type.lower():
                 continue
             table.add_row(s.name, short_type(s.primary_type), key=s.name)
+            if s.name == selected_key:
+                new_idx = idx
+            idx += 1
+        restore_cursor(table, selected_key, new_idx)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is not None:

@@ -13,6 +13,8 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
+from lazyrosplus.utils.datatable import current_row_key, restore_cursor
+
 if TYPE_CHECKING:
     pass
 
@@ -24,9 +26,13 @@ class InterfacesPanel(Vertical):
     ]
 
     DEFAULT_CSS = """
-    InterfacesPanel { layout: horizontal; }
-    InterfacesPanel > #left { width: 40%; min-width: 30; border-right: solid $primary 30%; }
-    InterfacesPanel > #right { width: 1fr; padding: 0 1; }
+    InterfacesPanel { layout: horizontal; overflow: hidden; }
+    InterfacesPanel > #left {
+        width: 40%; min-width: 30;
+        border-right: solid $primary 30%;
+        overflow: hidden;
+    }
+    InterfacesPanel > #right { width: 1fr; padding: 0 1; overflow: hidden; }
     InterfacesPanel #iface-detail { height: 1fr; }
     """
 
@@ -48,12 +54,12 @@ class InterfacesPanel(Vertical):
         t = self.query_one("#iface-table", DataTable)
         t.add_columns("Type", "Kind")
         self._discover()
-        self._render()
+        self._render_table()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter":
             self.filter_text = event.value
-            self._render()
+            self._render_table()
 
     def action_filter(self) -> None:
         self.query_one("#filter", Input).focus()
@@ -96,14 +102,19 @@ class InterfacesPanel(Vertical):
         out.sort()
         self._cache = out
 
-    def _render(self) -> None:
+    def _render_table(self) -> None:
         t = self.query_one("#iface-table", DataTable)
+        selected_key = current_row_key(t)
         t.clear()
         ft = self.filter_text.lower().strip()
-        for name, kind in self._cache:
-            if ft and ft not in name.lower():
-                continue
+        new_idx = -1
+        for idx, (name, kind) in enumerate(
+            (n, k) for n, k in self._cache if not ft or ft in n.lower()
+        ):
             t.add_row(name, kind, key=name)
+            if name == selected_key:
+                new_idx = idx
+        restore_cursor(t, selected_key, new_idx)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:

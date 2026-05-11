@@ -29,9 +29,13 @@ class ParamsPanel(Vertical):
     ]
 
     DEFAULT_CSS = """
-    ParamsPanel { layout: horizontal; }
-    ParamsPanel > #left { width: 35%; min-width: 30; border-right: solid $primary 30%; }
-    ParamsPanel > #right { width: 1fr; padding: 0 1; }
+    ParamsPanel { layout: horizontal; overflow: hidden; }
+    ParamsPanel > #left {
+        width: 35%; min-width: 30;
+        border-right: solid $primary 30%;
+        overflow: hidden;
+    }
+    ParamsPanel > #right { width: 1fr; padding: 0 1; overflow: hidden; }
     """
 
     filter_text: reactive[str] = reactive("")

@@ -12,6 +12,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
+from lazyrosplus.utils.datatable import current_row_key, restore_cursor
 from lazyrosplus.utils.formatting import short_type
 
 if TYPE_CHECKING:
@@ -28,9 +29,13 @@ class NodesPanel(Vertical):
     ]
 
     DEFAULT_CSS = """
-    NodesPanel { layout: horizontal; }
-    NodesPanel > #left { width: 40%; min-width: 30; border-right: solid $primary 30%; }
-    NodesPanel > #right { width: 1fr; padding: 0 1; }
+    NodesPanel { layout: horizontal; overflow: hidden; }
+    NodesPanel > #left {
+        width: 40%; min-width: 30;
+        border-right: solid $primary 30%;
+        overflow: hidden;
+    }
+    NodesPanel > #right { width: 1fr; padding: 0 1; overflow: hidden; }
     NodesPanel #node-detail { height: 1fr; }
     """
 
@@ -84,12 +89,19 @@ class NodesPanel(Vertical):
 
     def _render_table(self) -> None:
         table = self.query_one("#nodes-table", DataTable)
+        selected_key = current_row_key(table)
         table.clear()
         ft = self.filter_text.lower().strip()
+        new_idx = -1
+        idx = 0
         for n in self._node_cache:
             if ft and ft not in n.fqn.lower():
                 continue
             table.add_row(n.name, n.namespace, key=n.fqn)
+            if n.fqn == selected_key:
+                new_idx = idx
+            idx += 1
+        restore_cursor(table, selected_key, new_idx)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:
