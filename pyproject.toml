@@ -53,7 +53,7 @@ docs = [
 
 [project.urls]
 Homepage = "https://github.com/deyuf/rosight"
-Documentation = "https://github.com/deyuf/rosight#readme"
+Documentation = "https://deyuf.github.io/rosight/"
 Repository = "https://github.com/deyuf/rosight"
 Issues = "https://github.com/deyuf/rosight/issues"
 

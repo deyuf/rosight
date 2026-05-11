@@ -1,6 +1,9 @@
 # Rosight
 
+[![PyPI](https://img.shields.io/pypi/v/rosight.svg)](https://pypi.org/project/rosight/)
+[![Python](https://img.shields.io/pypi/pyversions/rosight.svg)](https://pypi.org/project/rosight/)
 [![CI](https://github.com/deyuf/rosight/actions/workflows/ci.yml/badge.svg)](https://github.com/deyuf/rosight/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-deyuf.github.io%2Frosight-blue)](https://deyuf.github.io/rosight/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Rosight** = ROS + sight. A keyboard-driven terminal cockpit for ROS 2.
@@ -9,7 +12,9 @@ Browse the live ROS 2 graph — messages, nodes, services, actions, parameters,
 TF, bags, interfaces — and live-plot any numeric field, all from one screen
 without a mouse. Built for SSH, tmux, robot consoles.
 
-![Messages tab](docs/screenshots/01-messages.svg)
+📖 **Docs:** <https://deyuf.github.io/rosight/>
+
+![Messages tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/01-messages.png)
 
 ## What's inside
 
@@ -29,16 +34,16 @@ Nine tabs, keyboard-driven, all on one screen:
 
 ### Screenshots
 
-![Nodes tab](docs/screenshots/02-nodes.svg)
+![Nodes tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/02-nodes.png)
 *Nodes (`2`)*
 
-![Services tab](docs/screenshots/03-services.svg)
+![Services tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/03-services.png)
 *Services (`3`)*
 
-![Actions tab](docs/screenshots/04-actions.svg)
+![Actions tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/04-actions.png)
 *Actions (`4`)*
 
-![Bags tab](docs/screenshots/06-bags.svg)
+![Bags tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/06-bags.png)
 *Bags (`8`) — recording state*
 
 Cross-cutting features:
@@ -51,12 +56,10 @@ Cross-cutting features:
 
 ## Install
 
-Rosight is not yet on PyPI; install from source:
+From PyPI:
 
 ```bash
-git clone https://github.com/deyuf/rosight
-cd rosight
-pip install -e .
+pip install rosight
 ```
 
 Then, in any terminal where you want to use it:
@@ -67,9 +70,18 @@ rosight
 ```
 
 If you maintain multiple distros, source the one whose `rclpy` should drive
-discovery before launching. See [`docs/installation.md`](docs/installation.md)
-for the recommended `--system-site-packages` venv layout that keeps the system
-`rclpy` reachable while pip manages everything else.
+discovery before launching. See the
+[installation guide](https://deyuf.github.io/rosight/installation/) for the
+recommended `--system-site-packages` venv layout that keeps the system `rclpy`
+reachable while pip manages everything else.
+
+From source (for development):
+
+```bash
+git clone https://github.com/deyuf/rosight
+cd rosight
+pip install -e ".[dev]"
+```
 
 ## Quick start
 
@@ -100,16 +112,18 @@ Plotting workflow (the question new users ask most):
 
 ## Documentation
 
-| Topic | File |
+Full docs site: <https://deyuf.github.io/rosight/>
+
+| Topic | Page |
 |-------|------|
-| Installation per distro | [docs/installation.md](docs/installation.md) |
-| Daily usage | [docs/usage.md](docs/usage.md) |
-| Keybindings | [docs/keybindings.md](docs/keybindings.md) |
-| Configuration | [docs/configuration.md](docs/configuration.md) |
-| Plotting deep-dive | [docs/plotting.md](docs/plotting.md) |
-| Architecture | [docs/architecture.md](docs/architecture.md) |
-| Contributing | [docs/development.md](docs/development.md) |
-| FAQ | [docs/faq.md](docs/faq.md) |
+| Installation per distro | [Install](https://deyuf.github.io/rosight/installation/) |
+| Daily usage | [Usage](https://deyuf.github.io/rosight/usage/) |
+| Keybindings | [Keybindings](https://deyuf.github.io/rosight/keybindings/) |
+| Configuration | [Configuration](https://deyuf.github.io/rosight/configuration/) |
+| Plotting deep-dive | [Plotting](https://deyuf.github.io/rosight/plotting/) |
+| Architecture | [Architecture](https://deyuf.github.io/rosight/architecture/) |
+| Contributing | [Development](https://deyuf.github.io/rosight/development/) |
+| FAQ | [FAQ](https://deyuf.github.io/rosight/faq/) |
 
 ## Project layout
 
