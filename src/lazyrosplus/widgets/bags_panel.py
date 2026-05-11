@@ -50,11 +50,15 @@ class BagsPanel(Vertical):
         self._record_proc: subprocess.Popen | None = None
         self._play_proc: subprocess.Popen | None = None
 
+    _HEADER_IDLE = (
+        "rosbag2 — [bold]R[/bold] record  ·  [bold]p[/bold] play  ·  [bold]i[/bold] bag info"
+    )
+    _HEADER_RECORDING = (
+        "[bold red]● recording[/bold red]  ·  press [bold]R[/bold] or [bold]s[/bold] to stop"
+    )
+
     def compose(self) -> ComposeResult:
-        yield Static(
-            "rosbag2 — capital R to record selected topics, p to play",
-            id="header",
-        )
+        yield Static(self._HEADER_IDLE, id="header", markup=True)
         yield Input(
             value="-a",
             placeholder="extra args (e.g. /odom /scan, or -a for all)",
@@ -82,45 +86,62 @@ class BagsPanel(Vertical):
 
     # ---- record / play -----------------------------------------------
 
+    # Long-running children inherit a copy of the parent TTY stdin unless we
+    # redirect it. While `ros2 bag record` is running, every keystroke the
+    # user makes is delivered to *both* Textual and the recorder — Textual
+    # sees a random subset of `1`-`9` and tab-switching looked "jumpy". The
+    # recorder also echoed bytes back into the Input on its way out, which
+    # showed up as random characters in the record-args box. `start_new_session`
+    # additionally detaches the child from our controlling terminal so SIGINT
+    # / window-size changes don't propagate to it.
+    _CHILD_KW = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "start_new_session": True,
+    }
+
     def action_toggle_record(self) -> None:
         if self._record_proc and self._record_proc.poll() is None:
             self._record_proc.terminate()
-            self.app_.push_status("recording stopped")
+            self._set_recording(False)
+            self.app_.notify("recording stopped", title="Bag")
             return
         args = self.query_one("#record-args", Input).value.split() or ["-a"]
         out_dir = Path.cwd() / f"lazyrosplus-bag-{int(time.time())}"
         cmd = ["ros2", "bag", "record", "-o", str(out_dir), *args]
         try:
-            self._record_proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            self._record_proc = subprocess.Popen(cmd, **self._CHILD_KW)
+            self._set_recording(True)
+            self.app_.notify(
+                f"recording to {out_dir.name}\npress R or s to stop",
+                title="Bag",
             )
-            self.app_.push_status(f"recording to {out_dir.name}")
         except FileNotFoundError:
-            self.app_.push_status("ros2 CLI not found in PATH")
+            self.app_.notify("ros2 CLI not found in PATH", severity="error")
         except Exception as e:
-            self.app_.push_status(f"record failed: {e}")
+            self.app_.notify(f"record failed: {e}", severity="error")
 
     def action_play(self) -> None:
         path = self.query_one("#play-path", Input).value.strip()
         if not path:
-            self.app_.push_status("set a bag path first")
+            self.app_.notify("set a bag path first", severity="warning")
             return
         try:
-            self._play_proc = subprocess.Popen(
-                ["ros2", "bag", "play", path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            self.app_.push_status(f"playing {path}")
+            self._play_proc = subprocess.Popen(["ros2", "bag", "play", path], **self._CHILD_KW)
+            self.app_.notify(f"playing {path}", title="Bag")
         except Exception as e:
-            self.app_.push_status(f"play failed: {e}")
+            self.app_.notify(f"play failed: {e}", severity="error")
 
     def action_stop(self) -> None:
+        stopped = False
         for proc in (self._record_proc, self._play_proc):
             if proc and proc.poll() is None:
                 proc.terminate()
+                stopped = True
+        if stopped:
+            self._set_recording(False)
+            self.app_.notify("stopped", title="Bag")
 
     def action_info(self) -> None:
         path = self.query_one("#play-path", Input).value.strip()
@@ -129,23 +150,43 @@ class BagsPanel(Vertical):
         try:
             res = subprocess.run(
                 ["ros2", "bag", "info", path],
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 check=False,
                 timeout=10,
             )
-            self.app_.push_status(f"bag info: {len(res.stdout.splitlines())} lines (see log)")
+            self.app_.notify(
+                f"bag info: {len(res.stdout.splitlines())} lines (see log)",
+                title="Bag",
+            )
             log.info("bag info:\n%s", res.stdout)
         except Exception as e:
-            self.app_.push_status(f"info failed: {e}")
+            self.app_.notify(f"info failed: {e}", severity="error")
+
+    def _set_recording(self, recording: bool) -> None:
+        """Swap the header text so the stop shortcut is visible during a record."""
+        try:
+            self.query_one("#header", Static).update(
+                self._HEADER_RECORDING if recording else self._HEADER_IDLE
+            )
+        except Exception:
+            pass
 
     def _refresh(self) -> None:
         if self.region.width == 0:
             return
         t = self.query_one("#procs", DataTable)
         t.clear()
+        recording = False
         for label, proc in (("record", self._record_proc), ("play", self._play_proc)):
             if proc is None:
                 continue
-            state = "running" if proc.poll() is None else f"exit {proc.returncode}"
+            alive = proc.poll() is None
+            if label == "record" and alive:
+                recording = True
+            state = "running" if alive else f"exit {proc.returncode}"
             t.add_row(label, str(proc.pid), state, "—", key=label)
+        # Auto-revert the header if the recorder exited on its own
+        # (e.g. SIGTERM from outside, disk full, ros2 crash).
+        self._set_recording(recording)

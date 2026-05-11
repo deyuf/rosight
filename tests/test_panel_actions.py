@@ -381,6 +381,98 @@ async def test_domain_command_rejects_garbage():
 
 
 @pytest.mark.asyncio
+async def test_bags_recorder_subprocess_isolates_stdin():
+    """Regression: rosbag2 record inherited the TTY stdin, which raced with
+    Textual on every keystroke — tabs randomly jumped, the record-args input
+    echoed random characters. The fix forces stdin=DEVNULL and start_new_session.
+    """
+    import subprocess
+
+    from lazyrosplus.widgets.bags_panel import BagsPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "bags"
+        await pilot.pause()
+        panel = pilot.app.query_one(BagsPanel)
+
+        captured: dict = {}
+
+        class _FakeProc:
+            def __init__(self):
+                self.pid = 12345
+                self.returncode: int | None = None
+
+            def poll(self):
+                return self.returncode
+
+            def terminate(self):
+                self.returncode = -15
+
+        def fake_popen(cmd, *args, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return _FakeProc()
+
+        original = subprocess.Popen
+        subprocess.Popen = fake_popen  # type: ignore[assignment]
+        try:
+            panel.action_toggle_record()
+            await pilot.pause()
+        finally:
+            subprocess.Popen = original  # type: ignore[assignment]
+
+        kw = captured["kwargs"]
+        assert kw.get("stdin") is subprocess.DEVNULL
+        assert kw.get("stdout") is subprocess.DEVNULL
+        assert kw.get("stderr") is subprocess.DEVNULL
+        assert kw.get("start_new_session") is True
+
+
+@pytest.mark.asyncio
+async def test_bags_header_swaps_to_show_stop_shortcut():
+    """When recording starts, the panel header should advertise the stop key."""
+    import subprocess
+
+    from textual.widgets import Static
+
+    from lazyrosplus.widgets.bags_panel import BagsPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "bags"
+        await pilot.pause()
+        panel = pilot.app.query_one(BagsPanel)
+        header = panel.query_one("#header", Static)
+
+        idle_text = str(getattr(header, "renderable", "") or getattr(header, "content", ""))
+        assert "R" in idle_text and "record" in idle_text.lower()
+        assert "stop" not in idle_text.lower()
+
+        class _FakeProc:
+            pid = 0
+            returncode: int | None = None
+
+            def poll(self):
+                return self.returncode
+
+            def terminate(self):
+                self.returncode = -15
+
+        original = subprocess.Popen
+        subprocess.Popen = lambda *_a, **_k: _FakeProc()  # type: ignore[assignment]
+        try:
+            panel.action_toggle_record()
+            await pilot.pause()
+        finally:
+            subprocess.Popen = original  # type: ignore[assignment]
+
+        rec_text = str(getattr(header, "renderable", "") or getattr(header, "content", ""))
+        assert "stop" in rec_text.lower()
+        assert "R" in rec_text or "s" in rec_text
+
+
+@pytest.mark.asyncio
 async def test_services_table_fills_panel_width_on_first_render():
     from textual.widgets import DataTable
 
