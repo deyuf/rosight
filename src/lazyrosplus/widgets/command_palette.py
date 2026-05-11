@@ -24,20 +24,25 @@ class CommandPalette(ModalScreen[str | None]):
     DEFAULT_CSS = """
     CommandPalette {
         align: center top;
+        background: $background 60%;
     }
     CommandPalette > Vertical {
         width: 80%;
         max-width: 100;
+        height: auto;
         margin-top: 4;
         background: $panel;
         border: round $primary;
         padding: 1 2;
     }
     CommandPalette Input {
-        border: none;
+        height: 3;
+        background: $surface;
+        border: tall $accent;
     }
     CommandPalette .hint {
         color: $text-muted;
+        height: auto;
     }
     """
 

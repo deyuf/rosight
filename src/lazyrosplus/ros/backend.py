@@ -220,6 +220,24 @@ class RosBackend:
     def __exit__(self, exc_type, exc, tb) -> None:
         self.stop()
 
+    def set_domain_id(self, new_domain_id: int | None) -> None:
+        """Restart the backend on a new ``ROS_DOMAIN_ID``.
+
+        Tears down the current rclpy context (including every active
+        subscription) and re-initializes against the new domain. Safe to
+        call from a UI thread — serialized via the backend RLock.
+
+        Raises ``RosUnavailable`` if rclpy isn't installed; the caller can
+        catch and surface via ``app.notify``.
+        """
+        with self._lock:
+            was_started = self._started
+            if was_started:
+                self.stop()
+            self.domain_id = new_domain_id
+            if was_started:
+                self.start()
+
     def _spin(self) -> None:
         try:
             self._executor.spin()

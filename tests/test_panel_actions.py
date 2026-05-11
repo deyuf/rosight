@@ -223,6 +223,164 @@ async def test_hidden_panel_refresh_skips_work():
 
 
 @pytest.mark.asyncio
+async def test_p_on_numeric_field_adds_plot_series():
+    """Regression: ``FieldSelected`` was defined at module level, so Textual
+    generated handler_name ``on_field_selected`` instead of
+    ``on_message_tree_field_selected``. The TopicsPanel handler was named the
+    latter so the bubbled message dropped on the floor and pressing `p` was
+    silent.
+    """
+    from lazyrosplus.widgets.message_tree import MessageTree
+    from lazyrosplus.widgets.topics_panel import TopicsPanel
+
+    # The class must be nested inside MessageTree for the dispatch to work.
+    assert MessageTree.FieldSelected.handler_name == "on_message_tree_field_selected"
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "topics"
+        await pilot.pause()
+        panel = pilot.app.query_one(TopicsPanel)
+        panel.selected_topic = "/odom"
+
+        calls: list[tuple[str, str]] = []
+        pilot.app.add_plot_series = lambda t, p: calls.append((t, p))  # type: ignore[method-assign]
+
+        tree = pilot.app.query_one("#msg-tree", MessageTree)
+        tree.post_message(
+            MessageTree.FieldSelected(
+                path="pose.position.x",
+                value=1.23,
+                type_name="float64",
+                is_numeric=True,
+            )
+        )
+        await pilot.pause()
+        assert calls == [("/odom", "pose.position.x")]
+
+
+@pytest.mark.asyncio
+async def test_p_on_non_numeric_field_does_not_add():
+    from lazyrosplus.widgets.message_tree import MessageTree
+    from lazyrosplus.widgets.topics_panel import TopicsPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "topics"
+        await pilot.pause()
+        panel = pilot.app.query_one(TopicsPanel)
+        panel.selected_topic = "/odom"
+
+        calls: list[tuple[str, str]] = []
+        pilot.app.add_plot_series = lambda t, p: calls.append((t, p))  # type: ignore[method-assign]
+
+        tree = pilot.app.query_one("#msg-tree", MessageTree)
+        tree.post_message(
+            MessageTree.FieldSelected(
+                path="header.frame_id",
+                value="map",
+                type_name="string",
+                is_numeric=False,
+            )
+        )
+        await pilot.pause()
+        assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_enter_on_topic_row_subscribes():
+    """Regression: Enter on a topic row should subscribe (not be eaten by DataTable).
+
+    Textual's DataTable owns the `enter` key — it fires its own RowSelected
+    event instead of bubbling the keypress up to the panel's BINDINGS.
+    Before this fix, our `Binding("enter", "echo")` on the panel never ran.
+    """
+    from textual.widgets import DataTable
+
+    from lazyrosplus.widgets.topics_panel import TopicsPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "topics"
+        await pilot.pause()
+        panel = pilot.app.query_one(TopicsPanel)
+        panel._topic_cache = [_topic("/odom", "nav_msgs/msg/Odometry")]
+        panel._render_table()
+        await pilot.pause()
+
+        calls = []
+
+        class _Spy:
+            started = True
+
+            def list_topics(self):
+                return panel._topic_cache
+
+            def get_subscription(self, topic):
+                return None
+
+            def active_subscriptions(self):
+                return []
+
+            def subscribe(self, topic, ty):
+                calls.append((topic, ty))
+
+        pilot.app.ros = _Spy()  # type: ignore[assignment]
+
+        # Move cursor to the row then fire DataTable.RowSelected the same
+        # way pressing Enter would.
+        table = pilot.app.query_one("#topics-table", DataTable)
+        table.move_cursor(row=0, animate=False)
+        await pilot.pause()
+        row_key, _col_key = table.coordinate_to_cell_key((0, 0))
+        panel.on_data_table_row_selected(
+            DataTable.RowSelected(table, 0, row_key)  # type: ignore[arg-type]
+        )
+        await pilot.pause()
+        assert calls == [("/odom", "nav_msgs/msg/Odometry")]
+
+
+@pytest.mark.asyncio
+async def test_domain_command_invokes_set_domain_id():
+    """`:domain N` should call RosBackend.set_domain_id(N) and notify the user."""
+    async with _app().run_test(headless=True, size=(120, 30)) as pilot:
+        await pilot.pause()
+        calls: list[int | None] = []
+
+        def fake_set(new_id: int | None) -> None:
+            calls.append(new_id)
+
+        pilot.app.ros.set_domain_id = fake_set  # type: ignore[assignment]
+        notes = _capture_notifications(pilot.app)
+        pilot.app._on_command_submitted("domain 7")
+        await pilot.pause()
+        assert calls == [7]
+        body = " ".join(str(a[0]) for a, _ in notes)
+        assert "ROS_DOMAIN_ID=7" in body
+
+
+@pytest.mark.asyncio
+async def test_domain_command_rejects_garbage():
+    """Non-integer / out-of-range domain ids should warn, not crash."""
+    async with _app().run_test(headless=True, size=(120, 30)) as pilot:
+        await pilot.pause()
+        called = {"n": 0}
+
+        def fake_set(_new_id: int | None) -> None:
+            called["n"] += 1
+
+        pilot.app.ros.set_domain_id = fake_set  # type: ignore[assignment]
+        notes = _capture_notifications(pilot.app)
+        pilot.app._on_command_submitted("domain abc")
+        pilot.app._on_command_submitted("domain 999")
+        await pilot.pause()
+        assert called["n"] == 0
+        body = " ".join(str(a[0]) for a, _ in notes)
+        assert "invalid" in body
+        assert "outside valid range" in body
+
+
+@pytest.mark.asyncio
 async def test_services_table_fills_panel_width_on_first_render():
     from textual.widgets import DataTable
 

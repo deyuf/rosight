@@ -1,7 +1,9 @@
 """Reusable widget that renders a ROS message as a navigable tree.
 
 Used by the Topics panel (echo view) and the Plot panel field picker.
-Emits ``FieldSelected`` when the user presses Enter on a numeric leaf.
+Emits ``MessageTree.FieldSelected`` when the user presses Enter on a numeric
+leaf — nested inside the widget so Textual generates the handler name
+``on_message_tree_field_selected`` for receivers.
 """
 
 from __future__ import annotations
@@ -17,22 +19,21 @@ from lazyrosplus.ros.introspection import FieldEntry, iter_fields
 from lazyrosplus.utils.formatting import format_value, short_type
 
 
-@dataclass
-class FieldSelected(Message):
-    """Posted when the user picks a field path."""
-
-    path: str
-    value: object
-    type_name: str
-    is_numeric: bool
-
-
 class MessageTree(Tree[FieldEntry]):
     """A Tree[FieldEntry] view of a single ROS message snapshot."""
 
+    @dataclass
+    class FieldSelected(Message):
+        """Posted when the user picks a field path."""
+
+        path: str
+        value: object
+        type_name: str
+        is_numeric: bool
+
     BINDINGS = [
         ("p", "select_field", "Plot field"),
-        ("enter", "select_field", "Select"),
+        ("enter", "activate", "Expand / plot"),
     ]
 
     DEFAULT_CSS = """
@@ -74,13 +75,35 @@ class MessageTree(Tree[FieldEntry]):
             return
         entry: FieldEntry = node.data
         self.post_message(
-            FieldSelected(
+            MessageTree.FieldSelected(
                 path=entry.path,
                 value=entry.value,
                 type_name=entry.type_name,
                 is_numeric=entry.is_numeric,
             )
         )
+
+    def action_activate(self) -> None:
+        """Enter handler that does the right thing for the node under cursor.
+
+        - Sub-message / array node → toggle expand/collapse.
+        - Leaf node → post ``FieldSelected`` (which the Topics panel turns
+          into a plot series for numeric leaves, or a "not numeric" notice
+          for the rest).
+
+        Without this, ``enter`` always called ``select_field`` and silently
+        no-op'd on every non-leaf, so users couldn't drill into nested
+        messages without hunting for the right Tree-default key.
+        """
+        node = self.cursor_node
+        if node is None:
+            return
+        entry: FieldEntry | None = node.data
+        if entry is None or not _is_leaf(entry):
+            # Non-leaf: behave like the base Tree's default — toggle.
+            node.toggle()
+            return
+        self.action_select_field()
 
 
 def _parent_of(path: str) -> str:
