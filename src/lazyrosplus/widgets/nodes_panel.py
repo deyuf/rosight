@@ -89,6 +89,7 @@ class NodesPanel(Vertical):
 
     def _render_table(self) -> None:
         table = self.query_one("#nodes-table", DataTable)
+        scroll = table.scroll_offset
         selected_key = current_row_key(table)
         table.clear()
         ft = self.filter_text.lower().strip()
@@ -102,11 +103,20 @@ class NodesPanel(Vertical):
                 new_idx = idx
             idx += 1
         restore_cursor(table, selected_key, new_idx)
+        try:
+            table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
+        except Exception:
+            pass
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:
             return
-        self.selected = str(event.row_key.value)
+        new = str(event.row_key.value)
+        # Skip the heavy node_info() call if the cursor didn't actually move
+        # (the 2 s refresh re-fires this event when restoring the cursor).
+        if new == self.selected:
+            return
+        self.selected = new
         self.action_info()
 
     def action_info(self) -> None:

@@ -88,6 +88,7 @@ class ServicesPanel(Vertical):
 
     def _render_table(self) -> None:
         table = self.query_one("#srv-table", DataTable)
+        scroll = table.scroll_offset
         selected_key = current_row_key(table)
         table.clear()
         ft = self.filter_text.lower().strip()
@@ -101,11 +102,19 @@ class ServicesPanel(Vertical):
                 new_idx = idx
             idx += 1
         restore_cursor(table, selected_key, new_idx)
+        try:
+            table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
+        except Exception:
+            pass
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.row_key is not None:
-            self.selected = str(event.row_key.value)
-            self.action_show()
+        if event.row_key is None:
+            return
+        new = str(event.row_key.value)
+        if new == self.selected:
+            return
+        self.selected = new
+        self.action_show()
 
     def action_show(self) -> None:
         s = next((x for x in self._svc_cache if x.name == self.selected), None)

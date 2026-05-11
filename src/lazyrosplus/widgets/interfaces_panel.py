@@ -104,6 +104,7 @@ class InterfacesPanel(Vertical):
 
     def _render_table(self) -> None:
         t = self.query_one("#iface-table", DataTable)
+        scroll = t.scroll_offset
         selected_key = current_row_key(t)
         t.clear()
         ft = self.filter_text.lower().strip()
@@ -115,6 +116,10 @@ class InterfacesPanel(Vertical):
             if name == selected_key:
                 new_idx = idx
         restore_cursor(t, selected_key, new_idx)
+        try:
+            t.scroll_to(x=scroll.x, y=scroll.y, animate=False)
+        except Exception:
+            pass
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:
