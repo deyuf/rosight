@@ -13,7 +13,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import current_row_key, restore_cursor
+from lazyrosplus.utils.datatable import current_row_key, fit_last_column, restore_cursor
 
 if TYPE_CHECKING:
     pass
@@ -120,6 +120,7 @@ class InterfacesPanel(Vertical):
             t.scroll_to(x=scroll.x, y=scroll.y, animate=False)
         except Exception:
             pass
+        fit_last_column(t)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:

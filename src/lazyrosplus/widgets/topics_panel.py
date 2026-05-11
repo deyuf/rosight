@@ -12,7 +12,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import current_row_key, restore_cursor
+from lazyrosplus.utils.datatable import current_row_key, fit_last_column, restore_cursor
 from lazyrosplus.utils.formatting import format_bytes, format_rate, short_type
 from lazyrosplus.widgets.message_tree import MessageTree
 
@@ -164,6 +164,7 @@ class TopicsPanel(Vertical):
             table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
         except Exception:
             pass
+        fit_last_column(table)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None:

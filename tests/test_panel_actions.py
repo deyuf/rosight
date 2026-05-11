@@ -168,3 +168,36 @@ async def test_topics_action_publish_notifies():
         panel.action_publish()
         await pilot.pause()
         assert any("publish" in str(a[0]).lower() for a, _ in notes)
+
+
+# ---------------------------------------------------------------------------
+# Cursor-row highlight bar should span the full visible width of the table,
+# not just sum-of-content-widths. Before fit_last_column the highlight ended
+# wherever the last cell's text ended, leaving a misaligned strip on the
+# right of the panel.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_services_table_fills_panel_width_on_first_render():
+    from textual.widgets import DataTable
+
+    from lazyrosplus.widgets.services_panel import ServicesPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "services"
+        for _ in range(3):
+            await pilot.pause()
+        panel = pilot.app.query_one(ServicesPanel)
+        panel._svc_cache = [_service(f"/controller/foo{i}/call_service", "") for i in range(5)]
+        panel._render_table()
+        await pilot.pause()
+        table = pilot.app.query_one("#srv-table", DataTable)
+        gap = table.region.width - table.virtual_size.width
+        # Within 2 cells of the visible region; a perfect zero gap is fragile
+        # (depends on whether a scrollbar slot is reserved).
+        assert -2 <= gap <= 2, (
+            f"row highlight will not span full width: region={table.region.width} "
+            f"virtual={table.virtual_size.width}"
+        )
