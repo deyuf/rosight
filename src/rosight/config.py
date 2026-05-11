@@ -1,7 +1,7 @@
 """User configuration loading.
 
-Configuration lives at ``$XDG_CONFIG_HOME/lazyrosplus/config.toml`` (falling back
-to ``~/.config/lazyrosplus/config.toml``). Missing files are not an error — the
+Configuration lives at ``$XDG_CONFIG_HOME/rosight/config.toml`` (falling back
+to ``~/.config/rosight/config.toml``). Missing files are not an error — the
 defaults are applied automatically.
 """
 
@@ -40,7 +40,7 @@ class StatsConfig:
 
 @dataclass(frozen=True, slots=True)
 class UIConfig:
-    theme: str = "lazyrosplus-dark"
+    theme: str = "rosight-dark"
     refresh_hz: float = 10.0
     discovery_period: float = 1.0  # how often to refresh topic/node lists
     vim_keys: bool = True
@@ -82,10 +82,10 @@ def _merge(default: Any, overrides: dict[str, Any]) -> Any:
 
 def config_path() -> Path:
     """Return the resolved config file path (does not require it to exist)."""
-    base = os.environ.get("LAZYROSPLUS_CONFIG")
+    base = os.environ.get("ROSIGHT_CONFIG")
     if base:
         return Path(base).expanduser()
-    return Path(user_config_dir("lazyrosplus")) / CONFIG_FILENAME
+    return Path(user_config_dir("rosight")) / CONFIG_FILENAME
 
 
 def load_config(path: Path | None = None) -> Config:
@@ -114,7 +114,7 @@ STATE_FILENAME = "state.toml"
 
 
 def state_path() -> Path:
-    return Path(user_config_dir("lazyrosplus")) / STATE_FILENAME
+    return Path(user_config_dir("rosight")) / STATE_FILENAME
 
 
 def load_user_state() -> dict[str, Any]:

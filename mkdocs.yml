@@ -1,8 +1,8 @@
-site_name: LazyrosPlus
+site_name: Rosight
 site_description: A lazygit-style terminal UI for ROS 2.
-site_url: https://deyuf.github.io/lazyrosplus/
-repo_url: https://github.com/deyuf/lazyrosplus
-repo_name: deyuf/lazyrosplus
+site_url: https://deyuf.github.io/rosight/
+repo_url: https://github.com/deyuf/rosight
+repo_name: deyuf/rosight
 edit_uri: edit/main/docs/
 
 theme:

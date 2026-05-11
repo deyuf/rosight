@@ -24,14 +24,14 @@ pytest.importorskip("textual")
 
 from textual.widgets import DataTable, Static, TabbedContent
 
-from lazyrosplus.app import LazyrosPlusApp
-from lazyrosplus.ros.backend import RosBackend
-from lazyrosplus.widgets.interfaces_panel import InterfacesPanel
-from lazyrosplus.widgets.nodes_panel import NodesPanel
-from lazyrosplus.widgets.services_panel import ServicesPanel
-from lazyrosplus.widgets.topics_panel import TopicsPanel
+from rosight.app import RosightApp
+from rosight.ros.backend import RosBackend
+from rosight.widgets.interfaces_panel import InterfacesPanel
+from rosight.widgets.nodes_panel import NodesPanel
+from rosight.widgets.services_panel import ServicesPanel
+from rosight.widgets.topics_panel import TopicsPanel
 
-_TOPIC_NAME = "/lazyrosplus_it_topic"
+_TOPIC_NAME = "/rosight_it_topic"
 
 # Skip the entire module if `ros2` isn't on PATH — these tests need it for the
 # out-of-process publisher.
@@ -78,9 +78,9 @@ async def _wait_for(check, *, timeout: float = 10.0, step: float = 0.2) -> bool:
     return False
 
 
-def _new_app() -> LazyrosPlusApp:
-    backend = RosBackend(node_name=f"lazyrosplus_it_{int(time.monotonic() * 1000)}")
-    return LazyrosPlusApp(ros=backend)
+def _new_app() -> RosightApp:
+    backend = RosBackend(node_name=f"rosight_it_{int(time.monotonic() * 1000)}")
+    return RosightApp(ros=backend)
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +197,7 @@ async def test_nodes_panel_sees_publisher_process(ros2_publisher):
         await pilot.pause()
         if not app.ros.started:
             pytest.skip("RosBackend failed to start in this environment")
-        # The lazyrosplus backend plus the ros2 topic pub node should both
+        # The rosight backend plus the ros2 topic pub node should both
         # show up (>= 2 nodes total).
         await _wait_for(lambda: len(app.ros.list_nodes()) >= 2, timeout=8.0)
         panel = pilot.app.query_one(NodesPanel)

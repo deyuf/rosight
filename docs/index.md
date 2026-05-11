@@ -1,27 +1,39 @@
-# LazyrosPlus
+# Rosight
 
-A lazygit-style terminal UI for ROS 2.
+> **ROS + sight.** A keyboard-driven terminal cockpit for ROS 2.
 
-`lazyrosplus` gives you a fast, keyboard-driven view of every running ROS 2
-graph: topics, nodes, services, actions, parameters, TF, and bags. It also
-embeds a live multi-series plotter so you can scope numeric fields without
-firing up `rqt_plot` or `plotjuggler`.
+Browse the live ROS 2 graph — messages, nodes, services, actions, parameters,
+TF, bags, interfaces — and live-plot any numeric field, all from one screen
+without a mouse. Built for SSH, tmux, robot consoles.
 
-## Why LazyrosPlus
+## What's inside
 
-- **No GUI required.** Runs over SSH, in a tmux pane, or on a robot console.
-- **Discovery without typing.** Tab through panels, fuzzy-filter, drill into
-  endpoints — never write a long `ros2 topic info` invocation again.
-- **Live plotting.** Pick any numeric leaf in any message and start scoping it
-  in one keystroke.
-- **Works without ROS 2.** The package imports cleanly without `rclpy` so
-  you can run unit tests and CI on cloud hosts; live ROS panels light up the
-  moment a workspace is sourced.
+Nine tabs, one screen, all keyboard:
+
+- **Messages** — topic list, live `hz`/`bw`/`jitter`, message-tree drill-down, auto-QoS subscription.
+- **Nodes** — publishers, subscribers, service / action endpoints per node.
+- **Services** — discovery + types (call form planned).
+- **Actions** — discovery + types (goal monitor planned).
+- **Params** — per-node parameters, get / set, type-aware.
+- **Plot** — multi-series live chart of any numeric leaf via `plotext`.
+- **TF** — auto-built frame tree from `/tf` and `/tf_static`.
+- **Bags** — `ros2 bag record` / `play` / `info` with stop hints.
+- **Interfaces** — browse every `msg` / `srv` / `action` definition on the system.
+
+## Why Rosight
+
+- **Runs anywhere a terminal does.** SSH, tmux, robot console, phone via Termius.
+- **Auto-QoS.** Sensor topics (`BEST_EFFORT`, `TRANSIENT_LOCAL` …) are matched by negotiating against every publisher — no manual profile fiddling.
+- **Runtime domain switch.** `:domain 5` reconnects on a new `ROS_DOMAIN_ID` without restarting.
+- **Theme persistence.** Pick a Textual theme via `Ctrl+P`; it survives restarts.
+- **Stable when ROS isn't there.** The package imports cleanly without `rclpy`, so you can run unit tests and tweak the UI on cloud hosts. Live panels light up the moment a workspace is sourced.
 
 ## Next steps
 
 - [Install](installation.md) on your distro
 - Read the [usage guide](usage.md)
-- Learn the [keybindings](keybindings.md)
+- Learn the [keybindings](keybindings.md) (incl. the `:` command palette)
 - Tune the [configuration](configuration.md)
+- Plotting workflow in [plotting](plotting.md)
 - Skim the [architecture](architecture.md) before contributing
+- [FAQ](faq.md) — text selection, "no series" hint, etc.

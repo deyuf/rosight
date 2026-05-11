@@ -13,7 +13,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import (
+from rosight.utils.datatable import (
     current_row_key,
     fit_last_column,
     fit_last_column_when_ready,
@@ -150,7 +150,7 @@ class InterfacesPanel(Vertical):
 
     def _show(self, name: str) -> None:
         try:
-            from lazyrosplus.ros.introspection import (
+            from rosight.ros.introspection import (
                 get_action_class,
                 get_message_class,
                 get_service_class,

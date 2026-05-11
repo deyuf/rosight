@@ -12,17 +12,17 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import (
+from rosight.utils.datatable import (
     current_row_key,
     fit_last_column,
     fit_last_column_when_ready,
     restore_cursor,
 )
-from lazyrosplus.utils.formatting import short_type
+from rosight.utils.formatting import short_type
 
 if TYPE_CHECKING:
-    from lazyrosplus.app import LazyrosPlusApp
-    from lazyrosplus.ros.backend import NodeInfo, RosBackend
+    from rosight.app import RosightApp
+    from rosight.ros.backend import NodeInfo, RosBackend
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class NodesPanel(Vertical):
         fit_last_column_when_ready(self.query_one("#nodes-table", DataTable))
 
     @property
-    def app_(self) -> LazyrosPlusApp:
+    def app_(self) -> RosightApp:
         return self.app  # type: ignore[return-value]
 
     @property

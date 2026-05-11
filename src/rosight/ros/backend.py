@@ -23,9 +23,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from lazyrosplus.ros import qos as qos_mod
-from lazyrosplus.ros.qos import QoSSpec
-from lazyrosplus.ros.stats import BandwidthMonitor, RateMonitor, estimate_msg_size
+from rosight.ros import qos as qos_mod
+from rosight.ros.qos import QoSSpec
+from rosight.ros.stats import BandwidthMonitor, RateMonitor, estimate_msg_size
 
 log = logging.getLogger(__name__)
 
@@ -126,11 +126,11 @@ class RosBackend:
 
     Use as a context manager::
 
-        with RosBackend(node_name="lazyrosplus") as ros:
+        with RosBackend(node_name="rosight") as ros:
             ros.list_topics()
     """
 
-    NODE_NAME_DEFAULT = "lazyrosplus"
+    NODE_NAME_DEFAULT = "rosight"
 
     def __init__(
         self,
@@ -182,7 +182,7 @@ class RosBackend:
             self._executor = MultiThreadedExecutor(num_threads=4, context=self._context)
             self._executor.add_node(self._node)
             self._spin_thread = threading.Thread(
-                target=self._spin, name="lazyrosplus-ros-executor", daemon=True
+                target=self._spin, name="rosight-ros-executor", daemon=True
             )
             self._spin_thread.start()
             self._started = True
@@ -374,7 +374,7 @@ class RosBackend:
         spec: QoSSpec | None = None,
     ) -> Subscription:
         """Subscribe to ``topic``; reuses an existing subscription if any."""
-        from lazyrosplus.ros.introspection import get_message_class
+        from rosight.ros.introspection import get_message_class
 
         node = self._require_node()
 
@@ -452,7 +452,7 @@ class RosBackend:
         message: Any,
         spec: QoSSpec | None = None,
     ) -> None:
-        from lazyrosplus.ros.introspection import get_message_class
+        from rosight.ros.introspection import get_message_class
 
         node = self._require_node()
         msg_cls = get_message_class(type_name)
@@ -477,7 +477,7 @@ class RosBackend:
         request: Any,
         timeout: float = 5.0,
     ) -> Any:
-        from lazyrosplus.ros.introspection import get_service_class
+        from rosight.ros.introspection import get_service_class
 
         node = self._require_node()
         srv_cls = get_service_class(type_name)

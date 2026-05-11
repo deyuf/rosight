@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from lazyrosplus.ros.introspection import (
+from rosight.ros.introspection import (
     FieldEntry,
     _is_numeric_type,
     _is_primitive_type,

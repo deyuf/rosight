@@ -12,18 +12,18 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import (
+from rosight.utils.datatable import (
     current_row_key,
     fit_last_column,
     fit_last_column_when_ready,
     restore_cursor,
 )
-from lazyrosplus.utils.formatting import format_bytes, format_rate, short_type
-from lazyrosplus.widgets.message_tree import MessageTree
+from rosight.utils.formatting import format_bytes, format_rate, short_type
+from rosight.widgets.message_tree import MessageTree
 
 if TYPE_CHECKING:
-    from lazyrosplus.app import LazyrosPlusApp
-    from lazyrosplus.ros.backend import RosBackend, Subscription, TopicInfo
+    from rosight.app import RosightApp
+    from rosight.ros.backend import RosBackend, Subscription, TopicInfo
 
 log = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class TopicsPanel(Vertical):
     # ---------------- table ----------------
 
     @property
-    def app_(self) -> LazyrosPlusApp:
+    def app_(self) -> RosightApp:
         return self.app  # type: ignore[return-value]
 
     @property

@@ -3,17 +3,23 @@
 The Plot panel is the headline feature: live, multi-series, terminal-native
 plotting of any numeric field exposed by any subscribed topic.
 
-## Adding a series
+## Adding a series — the workflow
 
-There are three ways:
+The Plot panel **does not** auto-plot every subscribed topic; it plots
+specific numeric *fields* you pick. Three ways:
 
-1. **From the message tree** (Topics panel)
-   1. Highlight a topic, press `Enter` to subscribe
-   2. Navigate the tree to a numeric leaf (`twist.linear.x`, etc.)
-   3. Press `p` (or `Enter`) — the leaf becomes a series and the app
-      switches to the Plot panel
+1. **From the message tree** (Messages tab) — most common
+   1. Move the cursor over a topic in the table.
+   2. **Enter** → subscribe to it. Focus auto-jumps to the message tree
+      on the right.
+   3. Use arrow keys / Space to expand sub-messages (`pose` →
+      `position` → `x`).
+   4. Cursor on a *numeric* leaf (int / float), press **p** — the series
+      is added and the Plot tab opens.
+      - If the leaf isn't numeric (string, array, etc.) you get a toast:
+        `field <path> is not numeric — skipped`.
 
-2. **From the command palette** (any panel)
+2. **From the command palette** (any tab)
    ```text
    :plot /odom twist.twist.linear.x
    ```
@@ -21,14 +27,19 @@ There are three ways:
 
 3. **Programmatically**
    ```python
-   from lazyrosplus.app import LazyrosPlusApp
+   from rosight.app import RosightApp
    ...
    app.add_plot_series("/odom", "twist.twist.linear.x")
    ```
 
+> **Stuck on "no series — press \[p] in the message tree to add a field"?**
+> That hint is correct: until you walk the tree to a numeric leaf and
+> press `p`, the chart stays empty even if you have data flowing. See
+> [keybindings](keybindings.md#messages-panel-1) for the full path.
+
 ## Field paths
 
-Paths follow a small DSL parsed by `lazyrosplus.utils.path.parse_path`:
+Paths follow a small DSL parsed by `rosight.utils.path.parse_path`:
 
 - Dotted attributes: `pose.position.x`
 - Sequence index: `poses[3].position.x`
@@ -70,7 +81,7 @@ Press `s` to dump every series in the buffer to a CSV in the current
 directory:
 
 ```
-lazyrosplus-1715169312.csv
+rosight-1715169312.csv
 
 timestamp,label,value
 12345.123,/odom/twist.twist.linear.x,0.182

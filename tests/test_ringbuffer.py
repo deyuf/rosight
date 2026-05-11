@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from lazyrosplus.utils.ringbuffer import RingBuffer, TimedRingBuffer
+from rosight.utils.ringbuffer import RingBuffer, TimedRingBuffer
 
 
 def test_ringbuffer_capacity_and_eviction():

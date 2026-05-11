@@ -12,12 +12,12 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import fit_last_column_when_ready
-from lazyrosplus.utils.formatting import format_value
+from rosight.utils.datatable import fit_last_column_when_ready
+from rosight.utils.formatting import format_value
 
 if TYPE_CHECKING:
-    from lazyrosplus.app import LazyrosPlusApp
-    from lazyrosplus.ros.backend import RosBackend
+    from rosight.app import RosightApp
+    from rosight.ros.backend import RosBackend
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class ParamsPanel(Vertical):
         return getattr(self.app, "ros", None)
 
     @property
-    def app_(self) -> LazyrosPlusApp:
+    def app_(self) -> RosightApp:
         return self.app  # type: ignore[return-value]
 
     def on_input_changed(self, event: Input.Changed) -> None:

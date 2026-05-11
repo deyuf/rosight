@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lazyrosplus.widgets.plot_view import PlotSeries, assign_color
+from rosight.widgets.plot_view import PlotSeries, assign_color
 
 
 def test_assign_color_cycles():

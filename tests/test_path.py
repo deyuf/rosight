@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from lazyrosplus.utils.path import (
+from rosight.utils.path import (
     format_path,
     get_value,
     is_numeric,

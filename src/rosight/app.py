@@ -2,7 +2,7 @@
 
 Holds the :class:`RosBackend`, the panel registry, and the global key
 bindings. Each panel is implemented as a self-contained widget under
-``lazyrosplus.widgets`` and registered here.
+``rosight.widgets`` and registered here.
 """
 
 from __future__ import annotations
@@ -15,29 +15,29 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
-from lazyrosplus.config import Config, load_user_state, save_user_state
-from lazyrosplus.ros.backend import RosBackend, RosUnavailable
-from lazyrosplus.widgets.actions_panel import ActionsPanel
-from lazyrosplus.widgets.bags_panel import BagsPanel
-from lazyrosplus.widgets.command_palette import CommandPalette
-from lazyrosplus.widgets.help_screen import HelpScreen
-from lazyrosplus.widgets.interfaces_panel import InterfacesPanel
-from lazyrosplus.widgets.nodes_panel import NodesPanel
-from lazyrosplus.widgets.params_panel import ParamsPanel
-from lazyrosplus.widgets.plot_panel import PlotPanel
-from lazyrosplus.widgets.services_panel import ServicesPanel
-from lazyrosplus.widgets.status_bar import StatusBar
-from lazyrosplus.widgets.tf_panel import TfPanel
-from lazyrosplus.widgets.topics_panel import TopicsPanel
+from rosight.config import Config, load_user_state, save_user_state
+from rosight.ros.backend import RosBackend, RosUnavailable
+from rosight.widgets.actions_panel import ActionsPanel
+from rosight.widgets.bags_panel import BagsPanel
+from rosight.widgets.command_palette import CommandPalette
+from rosight.widgets.help_screen import HelpScreen
+from rosight.widgets.interfaces_panel import InterfacesPanel
+from rosight.widgets.nodes_panel import NodesPanel
+from rosight.widgets.params_panel import ParamsPanel
+from rosight.widgets.plot_panel import PlotPanel
+from rosight.widgets.services_panel import ServicesPanel
+from rosight.widgets.status_bar import StatusBar
+from rosight.widgets.tf_panel import TfPanel
+from rosight.widgets.topics_panel import TopicsPanel
 
 log = logging.getLogger(__name__)
 
 
-class LazyrosPlusApp(App[int]):
+class RosightApp(App[int]):
     """Main Textual application."""
 
     CSS_PATH = "app.tcss"
-    TITLE = "LazyrosPlus"
+    TITLE = "Rosight"
     SUB_TITLE = "ROS 2 TUI"
 
     BINDINGS = [

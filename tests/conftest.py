@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Allow ``import lazyrosplus`` even when the package is installed in editable
+# Allow ``import rosight`` even when the package is installed in editable
 # mode under a different prefix than the test run env.
 SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
