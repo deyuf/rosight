@@ -31,6 +31,23 @@ def restore_cursor(table: Any, key: str | None, index: int) -> None:
         pass
 
 
+def fit_last_column_when_ready(table: Any) -> None:
+    """Call ``fit_last_column`` after the next layout pass.
+
+    Use from ``on_mount`` (where ``table.size`` is still zero) and
+    ``on_resize``: by the time Textual finishes the current refresh cycle,
+    the table has a real region and ``fit_last_column`` can compute the
+    right widths.
+    """
+    try:
+        table.call_after_refresh(fit_last_column, table)
+    except Exception:
+        # If the deferred call mechanism isn't available, fall back to a
+        # direct call — it may no-op on the first attempt but the next
+        # tick will get it right.
+        fit_last_column(table)
+
+
 def fit_last_column(table: Any) -> None:
     """Stretch the last column so the cursor highlight reaches the right edge.
 

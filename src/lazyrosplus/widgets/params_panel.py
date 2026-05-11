@@ -12,6 +12,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
+from lazyrosplus.utils.datatable import fit_last_column_when_ready
 from lazyrosplus.utils.formatting import format_value
 
 if TYPE_CHECKING:
@@ -57,8 +58,14 @@ class ParamsPanel(Vertical):
         nt.add_columns("Node")
         pt = self.query_one("#params-table", DataTable)
         pt.add_columns("Name", "Type", "Value")
+        fit_last_column_when_ready(nt)
+        fit_last_column_when_ready(pt)
         self._refresh_nodes()
         self.set_interval(3.0, self._refresh_nodes)
+
+    def on_resize(self) -> None:
+        fit_last_column_when_ready(self.query_one("#nodes-table", DataTable))
+        fit_last_column_when_ready(self.query_one("#params-table", DataTable))
 
     @property
     def ros(self) -> RosBackend | None:

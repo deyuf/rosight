@@ -12,7 +12,12 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import current_row_key, fit_last_column, restore_cursor
+from lazyrosplus.utils.datatable import (
+    current_row_key,
+    fit_last_column,
+    fit_last_column_when_ready,
+    restore_cursor,
+)
 from lazyrosplus.utils.formatting import short_type
 
 if TYPE_CHECKING:
@@ -57,8 +62,12 @@ class ServicesPanel(Vertical):
     def on_mount(self) -> None:
         table = self.query_one("#srv-table", DataTable)
         table.add_columns("Service", "Type")
+        fit_last_column_when_ready(table)
         self._refresh()
         self.set_interval(2.0, self._refresh)
+
+    def on_resize(self) -> None:
+        fit_last_column_when_ready(self.query_one("#srv-table", DataTable))
 
     @property
     def ros(self) -> RosBackend | None:

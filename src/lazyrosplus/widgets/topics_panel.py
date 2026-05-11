@@ -12,7 +12,12 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from lazyrosplus.utils.datatable import current_row_key, fit_last_column, restore_cursor
+from lazyrosplus.utils.datatable import (
+    current_row_key,
+    fit_last_column,
+    fit_last_column_when_ready,
+    restore_cursor,
+)
 from lazyrosplus.utils.formatting import format_bytes, format_rate, short_type
 from lazyrosplus.widgets.message_tree import MessageTree
 
@@ -87,9 +92,13 @@ class TopicsPanel(Vertical):
     def on_mount(self) -> None:
         table = self.query_one("#topics-table", DataTable)
         table.add_columns("Topic", "Type", "Pub", "Sub", "Hz", "BW")
+        fit_last_column_when_ready(table)
         self._refresh_table()
         self.set_interval(1.0, self._refresh_table)
         self.set_interval(0.25, self._refresh_detail)
+
+    def on_resize(self) -> None:
+        fit_last_column_when_ready(self.query_one("#topics-table", DataTable))
 
     # ---------------- filter ----------------
 

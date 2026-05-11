@@ -13,6 +13,7 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import DataTable, Static
 
+from lazyrosplus.utils.datatable import fit_last_column_when_ready
 from lazyrosplus.utils.formatting import format_value
 from lazyrosplus.utils.path import get_value, parse_path
 from lazyrosplus.widgets.plot_view import PlotView
@@ -65,9 +66,13 @@ class PlotPanel(Vertical):
     def on_mount(self) -> None:
         st = self.query_one("#side-table", DataTable)
         st.add_columns("Series", "Last")
+        fit_last_column_when_ready(st)
         # Sample subscribed topics' last_msg at refresh_hz to push points.
         self.set_interval(1 / 15, self._sample)
         self.set_interval(1.0, self._refresh_table)
+
+    def on_resize(self) -> None:
+        fit_last_column_when_ready(self.query_one("#side-table", DataTable))
 
     @property
     def ros(self) -> RosBackend | None:
