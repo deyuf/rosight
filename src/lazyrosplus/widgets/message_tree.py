@@ -1,7 +1,9 @@
 """Reusable widget that renders a ROS message as a navigable tree.
 
 Used by the Topics panel (echo view) and the Plot panel field picker.
-Emits ``FieldSelected`` when the user presses Enter on a numeric leaf.
+Emits ``MessageTree.FieldSelected`` when the user presses Enter on a numeric
+leaf — nested inside the widget so Textual generates the handler name
+``on_message_tree_field_selected`` for receivers.
 """
 
 from __future__ import annotations
@@ -17,18 +19,17 @@ from lazyrosplus.ros.introspection import FieldEntry, iter_fields
 from lazyrosplus.utils.formatting import format_value, short_type
 
 
-@dataclass
-class FieldSelected(Message):
-    """Posted when the user picks a field path."""
-
-    path: str
-    value: object
-    type_name: str
-    is_numeric: bool
-
-
 class MessageTree(Tree[FieldEntry]):
     """A Tree[FieldEntry] view of a single ROS message snapshot."""
+
+    @dataclass
+    class FieldSelected(Message):
+        """Posted when the user picks a field path."""
+
+        path: str
+        value: object
+        type_name: str
+        is_numeric: bool
 
     BINDINGS = [
         ("p", "select_field", "Plot field"),
@@ -74,7 +75,7 @@ class MessageTree(Tree[FieldEntry]):
             return
         entry: FieldEntry = node.data
         self.post_message(
-            FieldSelected(
+            MessageTree.FieldSelected(
                 path=entry.path,
                 value=entry.value,
                 type_name=entry.type_name,

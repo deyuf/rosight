@@ -15,7 +15,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
-from lazyrosplus.config import Config
+from lazyrosplus.config import Config, load_user_state, save_user_state
 from lazyrosplus.ros.backend import RosBackend, RosUnavailable
 from lazyrosplus.widgets.actions_panel import ActionsPanel
 from lazyrosplus.widgets.bags_panel import BagsPanel
@@ -100,6 +100,23 @@ class LazyrosPlusApp(App[int]):
             yield Footer()
 
     async def on_mount(self) -> None:
+        # Restore the theme the user last picked via Ctrl+P → Change theme.
+        # Failures are silent: if the state file is missing or names a theme
+        # Textual no longer ships, we just stay on the default.
+        try:
+            state = load_user_state()
+            saved = state.get("theme")
+            if isinstance(saved, str) and self.get_theme(saved) is not None:
+                self.theme = saved
+        except Exception:
+            log.debug("could not restore theme", exc_info=True)
+
+        # Persist on every subsequent theme change.
+        try:
+            self.theme_changed_signal.subscribe(self, self._on_theme_changed)
+        except Exception:
+            log.debug("could not subscribe to theme_changed_signal", exc_info=True)
+
         # Try to start the ROS backend; downgrade to a banner on failure.
         if self._owns_ros:
             try:
@@ -120,6 +137,18 @@ class LazyrosPlusApp(App[int]):
             self.backend_ok = self.ros.started
 
         self.set_interval(self.config.ui.discovery_period, self._refresh_status)
+
+    def _on_theme_changed(self, theme) -> None:
+        """Persist the chosen theme so it survives restarts."""
+        try:
+            name = getattr(theme, "name", None) or self.theme
+            if not isinstance(name, str):
+                return
+            state = load_user_state()
+            state["theme"] = name
+            save_user_state(state)
+        except Exception:
+            log.debug("could not persist theme", exc_info=True)
 
     async def on_unmount(self) -> None:
         if self._owns_ros:

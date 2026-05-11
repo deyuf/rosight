@@ -103,3 +103,51 @@ def load_config(path: Path | None = None) -> Config:
     except tomllib.TOMLDecodeError as e:
         raise ValueError(f"Invalid TOML in {p}: {e}") from e
     return Config.from_dict(data)
+
+
+# ---------------------------------------------------------------------------
+# Runtime user state (theme choice, ...). Kept separate from ``config.toml``
+# so the user's hand-written config is never rewritten by the app.
+# ---------------------------------------------------------------------------
+
+STATE_FILENAME = "state.toml"
+
+
+def state_path() -> Path:
+    return Path(user_config_dir("lazyrosplus")) / STATE_FILENAME
+
+
+def load_user_state() -> dict[str, Any]:
+    """Return the persisted user-state dict (theme, etc.). Empty on miss."""
+    p = state_path()
+    if not p.exists():
+        return {}
+    try:
+        with p.open("rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
+
+
+def save_user_state(state: dict[str, Any]) -> None:
+    """Atomically replace the state file with ``state``.
+
+    Best-effort: failure to write (read-only FS, etc.) is silently swallowed
+    so we never crash the app over a cosmetic preference.
+    """
+    p = state_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            for k, v in state.items():
+                if isinstance(v, str):
+                    escaped = v.replace("\\", "\\\\").replace('"', '\\"')
+                    f.write(f'{k} = "{escaped}"\n')
+                elif isinstance(v, bool):
+                    f.write(f"{k} = {'true' if v else 'false'}\n")
+                elif isinstance(v, (int, float)):
+                    f.write(f"{k} = {v}\n")
+        tmp.replace(p)
+    except Exception:
+        pass
