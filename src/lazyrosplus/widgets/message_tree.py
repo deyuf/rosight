@@ -32,7 +32,7 @@ class MessageTree(Tree[FieldEntry]):
 
     BINDINGS = [
         ("p", "select_field", "Plot field"),
-        ("enter", "select_field", "Select"),
+        ("enter", "activate", "Expand / plot"),
     ]
 
     DEFAULT_CSS = """
@@ -81,6 +81,28 @@ class MessageTree(Tree[FieldEntry]):
                 is_numeric=entry.is_numeric,
             )
         )
+
+    def action_activate(self) -> None:
+        """Enter handler that does the right thing for the node under cursor.
+
+        - Sub-message / array node → toggle expand/collapse.
+        - Leaf node → post ``FieldSelected`` (which the Topics panel turns
+          into a plot series for numeric leaves, or a "not numeric" notice
+          for the rest).
+
+        Without this, ``enter`` always called ``select_field`` and silently
+        no-op'd on every non-leaf, so users couldn't drill into nested
+        messages without hunting for the right Tree-default key.
+        """
+        node = self.cursor_node
+        if node is None:
+            return
+        entry: FieldEntry | None = node.data
+        if entry is None or not _is_leaf(entry):
+            # Non-leaf: behave like the base Tree's default — toggle.
+            node.toggle()
+            return
+        self.action_select_field()
 
 
 def _parent_of(path: str) -> str:

@@ -223,6 +223,59 @@ async def test_hidden_panel_refresh_skips_work():
 
 
 @pytest.mark.asyncio
+async def test_enter_on_topic_row_subscribes():
+    """Regression: Enter on a topic row should subscribe (not be eaten by DataTable).
+
+    Textual's DataTable owns the `enter` key — it fires its own RowSelected
+    event instead of bubbling the keypress up to the panel's BINDINGS.
+    Before this fix, our `Binding("enter", "echo")` on the panel never ran.
+    """
+    from textual.widgets import DataTable
+
+    from lazyrosplus.widgets.topics_panel import TopicsPanel
+
+    async with _app().run_test(headless=True, size=(160, 40)) as pilot:
+        await pilot.pause()
+        pilot.app.query_one(TabbedContent).active = "topics"
+        await pilot.pause()
+        panel = pilot.app.query_one(TopicsPanel)
+        panel._topic_cache = [_topic("/odom", "nav_msgs/msg/Odometry")]
+        panel._render_table()
+        await pilot.pause()
+
+        calls = []
+
+        class _Spy:
+            started = True
+
+            def list_topics(self):
+                return panel._topic_cache
+
+            def get_subscription(self, topic):
+                return None
+
+            def active_subscriptions(self):
+                return []
+
+            def subscribe(self, topic, ty):
+                calls.append((topic, ty))
+
+        pilot.app.ros = _Spy()  # type: ignore[assignment]
+
+        # Move cursor to the row then fire DataTable.RowSelected the same
+        # way pressing Enter would.
+        table = pilot.app.query_one("#topics-table", DataTable)
+        table.move_cursor(row=0, animate=False)
+        await pilot.pause()
+        row_key, _col_key = table.coordinate_to_cell_key((0, 0))
+        panel.on_data_table_row_selected(
+            DataTable.RowSelected(table, 0, row_key)  # type: ignore[arg-type]
+        )
+        await pilot.pause()
+        assert calls == [("/odom", "nav_msgs/msg/Odometry")]
+
+
+@pytest.mark.asyncio
 async def test_domain_command_invokes_set_domain_id():
     """`:domain N` should call RosBackend.set_domain_id(N) and notify the user."""
     async with _app().run_test(headless=True, size=(120, 30)) as pilot:

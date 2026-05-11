@@ -190,6 +190,24 @@ class TopicsPanel(Vertical):
             return
         self.selected_topic = str(event.row_key.value)
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        # DataTable owns the `enter` keybinding (it's defined in textual's
+        # base class with show=False), which means our panel-level
+        # `Binding("enter", "echo")` never actually fires — the table
+        # consumes the keypress and emits this RowSelected event instead.
+        # Translating it back into action_echo restores the original UX:
+        # pressing Enter on a row subscribes to that topic.
+        if event.row_key is None:
+            return
+        self.selected_topic = str(event.row_key.value)
+        self.action_echo()
+        # Auto-focus the message tree so the user can immediately expand
+        # fields with arrow keys / space, without an extra Tab.
+        try:
+            self.query_one("#msg-tree").focus()
+        except Exception:
+            pass
+
     # ---------------- echo / detail ----------------
 
     def action_echo(self) -> None:
