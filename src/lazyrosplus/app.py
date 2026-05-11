@@ -45,7 +45,7 @@ class LazyrosPlusApp(App[int]):
         Binding("?", "help", "Help"),
         Binding(":", "command", "Command"),
         Binding("r", "refresh", "Refresh"),
-        Binding("1", "tab('topics')", "Topics", show=False),
+        Binding("1", "tab('topics')", "Messages", show=False),
         Binding("2", "tab('nodes')", "Nodes", show=False),
         Binding("3", "tab('services')", "Services", show=False),
         Binding("4", "tab('actions')", "Actions", show=False),
@@ -77,7 +77,7 @@ class LazyrosPlusApp(App[int]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with TabbedContent(initial="topics", id="main-tabs"):
-            with TabPane("Topics", id="topics"):
+            with TabPane("Messages", id="topics"):
                 yield TopicsPanel()
             with TabPane("Nodes", id="nodes"):
                 yield NodesPanel()

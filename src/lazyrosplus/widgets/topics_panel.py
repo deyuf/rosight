@@ -69,6 +69,9 @@ class TopicsPanel(Vertical):
     def __init__(self) -> None:
         super().__init__()
         self._topic_cache: list[TopicInfo] = []
+        # (selected_topic, last_msg_ts) of the message currently in the tree;
+        # used to skip the O(fields) rebuild when nothing changed.
+        self._tree_ts: tuple[str | None, float] = (None, 0.0)
 
     # ---------------- compose ----------------
 
@@ -121,8 +124,13 @@ class TopicsPanel(Vertical):
 
     def _render_table(self) -> None:
         table = self.query_one("#topics-table", DataTable)
-        scroll_y = table.scroll_offset.y
+        # Preserve BOTH axes — `clear()` resets scroll to (0, 0), which made
+        # the user's horizontal scroll position jump back every tick.
+        scroll = table.scroll_offset
         selected_key = current_row_key(table)
+        # One lock-protected call to get every active sub at once, then a
+        # dict lookup per row instead of N lock acquisitions.
+        subs_by_topic = {s.topic: s for s in self.ros.active_subscriptions()} if self.ros else {}
         table.clear()
         ft = self.filter_text.lower().strip()
         new_idx = -1
@@ -130,7 +138,7 @@ class TopicsPanel(Vertical):
         for ti in self._topic_cache:
             if ft and ft not in ti.name.lower() and ft not in ti.primary_type.lower():
                 continue
-            sub = self.ros.get_subscription(ti.name) if self.ros else None
+            sub = subs_by_topic.get(ti.name)
             hz_str = "—"
             bw_str = "—"
             if sub is not None:
@@ -153,7 +161,7 @@ class TopicsPanel(Vertical):
             idx += 1
         restore_cursor(table, selected_key, new_idx)
         try:
-            table.scroll_to(y=scroll_y, animate=False)
+            table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
         except Exception:
             pass
 
@@ -249,7 +257,10 @@ class TopicsPanel(Vertical):
             )
         )
         if not self.paused and sub.last_msg is not None:
-            tree.update_message(sub.last_msg)
+            stamp = (topic, sub.last_msg_ts)
+            if stamp != self._tree_ts:
+                tree.update_message(sub.last_msg)
+                self._tree_ts = stamp
 
     # ---------------- bridge: forward field selection to plot ----------------
 
