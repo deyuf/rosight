@@ -46,6 +46,7 @@ class _CompMsg:
 
 # ----- LUT sanity -----------------------------------------------------------
 
+
 def test_turbo_lut_shape_and_endpoints():
     assert TURBO_LUT.shape == (256, 3)
     assert TURBO_LUT.dtype == np.uint8
@@ -64,6 +65,7 @@ def test_viridis_lut_shape():
 
 
 # ----- raw image encodings --------------------------------------------------
+
 
 def test_decode_rgb8():
     h, w = 4, 6
@@ -117,7 +119,7 @@ def test_decode_mono8():
 
 def test_decode_mono16_to_colormap():
     h, w = 5, 5
-    arr = (np.arange(h * w, dtype=np.uint16) * 1000)
+    arr = np.arange(h * w, dtype=np.uint16) * 1000
     # Avoid 0 (treated as "no return") in this synthetic image.
     arr = (arr + 1).astype(np.uint16).reshape(h, w)
     img = decode_image(_ImgMsg(w, h, "mono16", arr.tobytes()), colormap="turbo")
@@ -162,6 +164,7 @@ def test_decode_handles_list_data():
 
 
 # ----- compressed image -----------------------------------------------------
+
 
 def _make_compressed_bytes(fmt="JPEG"):
     img = PILImage.new("RGB", (8, 8), color=(123, 45, 200))

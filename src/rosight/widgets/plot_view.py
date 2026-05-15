@@ -150,9 +150,7 @@ class PlotView(Static):
         if not self.paused:
             s.push(value, ts)
 
-    def push_snapshot(
-        self, label: str, values: Sequence[float], ts: float | None = None
-    ) -> None:
+    def push_snapshot(self, label: str, values: Sequence[float], ts: float | None = None) -> None:
         s = self.series.get(label)
         if s is None:
             s = self.add_snapshot_series(label)
