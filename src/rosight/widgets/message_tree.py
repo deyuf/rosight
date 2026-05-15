@@ -9,6 +9,7 @@ leaf — nested inside the widget so Textual generates the handler name
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from rich.text import Text
 from textual.message import Message
@@ -30,6 +31,7 @@ class MessageTree(Tree[FieldEntry]):
         value: object
         type_name: str
         is_numeric: bool
+        kind: Literal["scalar", "array"] = "scalar"
 
     BINDINGS = [
         ("p", "select_field", "Plot field"),
@@ -74,33 +76,30 @@ class MessageTree(Tree[FieldEntry]):
         if node is None or node.data is None:
             return
         entry: FieldEntry = node.data
+        kind: Literal["scalar", "array"] = "array" if entry.is_array_numeric else "scalar"
         self.post_message(
             MessageTree.FieldSelected(
                 path=entry.path,
                 value=entry.value,
                 type_name=entry.type_name,
                 is_numeric=entry.is_numeric,
+                kind=kind,
             )
         )
 
     def action_activate(self) -> None:
         """Enter handler that does the right thing for the node under cursor.
 
-        - Sub-message / array node → toggle expand/collapse.
-        - Leaf node → post ``FieldSelected`` (which the Topics panel turns
-          into a plot series for numeric leaves, or a "not numeric" notice
-          for the rest).
-
-        Without this, ``enter`` always called ``select_field`` and silently
-        no-op'd on every non-leaf, so users couldn't drill into nested
-        messages without hunting for the right Tree-default key.
+        - Sub-message / non-plottable array node → toggle expand/collapse.
+        - Numeric leaf → post ``FieldSelected`` (scalar plot).
+        - Numeric array container → post ``FieldSelected`` (snapshot plot).
         """
         node = self.cursor_node
         if node is None:
             return
         entry: FieldEntry | None = node.data
-        if entry is None or not _is_leaf(entry):
-            # Non-leaf: behave like the base Tree's default — toggle.
+        if entry is None or (not _is_leaf(entry) and not entry.is_array_numeric):
+            # Non-leaf and not a plottable array: behave like base Tree's default.
             node.toggle()
             return
         self.action_select_field()
@@ -135,7 +134,13 @@ def _format_label(entry: FieldEntry) -> Text:
     text = Text()
     text.append(name, style="bold")
     text.append("  ")
-    if isinstance(entry.value, str) and entry.value.startswith("<"):
+    if entry.is_array_numeric and isinstance(entry.value, str) and entry.value.startswith("<"):
+        # Numeric-array container: emphasize that it's snapshot-plottable.
+        text.append(entry.value, style="dim italic")
+        text.append("  ")
+        text.append("[plot ↵]", style="green bold")
+        text.append(f"  : {short_type(entry.type_name)}", style="dim")
+    elif isinstance(entry.value, str) and entry.value.startswith("<"):
         text.append(entry.value, style="dim italic")
     elif _is_leaf(entry):
         text.append(format_value(entry.value), style="cyan")

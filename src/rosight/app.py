@@ -194,6 +194,15 @@ class RosightApp(App[int]):
         except Exception:
             log.exception("could not add plot series")
 
+    def add_plot_snapshot_series(self, topic: str, field_path: str) -> None:
+        """Forward array-field selection from the topics panel to plot."""
+        try:
+            panel = self.query_one(PlotPanel)
+            panel.add_snapshot_series(topic, field_path)
+            self.action_tab("plot")
+        except Exception:
+            log.exception("could not add plot snapshot series")
+
     # --------------- background tickers ---------------
 
     def _refresh_status(self) -> None:
@@ -234,6 +243,16 @@ class RosightApp(App[int]):
         elif cmd == "plot" and len(args) >= 2:
             topic, path = args[0], args[1]
             self.add_plot_series(topic, path)
+        elif cmd == "plot-array" and len(args) >= 2:
+            topic, path = args[0], args[1]
+            self.add_plot_snapshot_series(topic, path)
+        elif cmd == "view" and len(args) >= 1:
+            try:
+                tp = self.query_one(TopicsPanel)
+                tp.selected_topic = args[0]
+                tp.action_view_image()
+            except Exception:
+                self.push_status(f"could not open image view for {args[0]}")
         elif cmd == "record":
             self.action_tab("bags")
         elif cmd == "help":

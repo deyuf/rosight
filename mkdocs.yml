@@ -56,4 +56,5 @@ nav:
   - Reference:
       - Architecture: architecture.md
       - Development: development.md
+      - Feature test matrix: feature_test.md
       - FAQ: faq.md

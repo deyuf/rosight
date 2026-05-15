@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rosight.widgets.plot_view import PlotSeries, assign_color
+from rosight.widgets.plot_view import PlotSeries, SnapshotSeries, assign_color
 
 
 def test_assign_color_cycles():
@@ -28,3 +28,22 @@ def test_plot_series_empty_stats_returns_none():
     s = PlotSeries(label="empty")
     assert s.stats() is None
     assert s.latest is None
+
+
+def test_snapshot_series_stats_min_max_len():
+    s = SnapshotSeries(label="snap")
+    assert s.stats() is None
+    s.set_latest([3.0, 1.0, 4.0, 1.5, 9.0])
+    stat = s.stats()
+    assert stat is not None
+    mn, mx, ln = stat
+    assert mn == 1.0
+    assert mx == 9.0
+    assert ln == 5
+
+
+def test_snapshot_series_set_latest_overwrites():
+    s = SnapshotSeries(label="snap")
+    s.set_latest([1, 2, 3])
+    s.set_latest([10])
+    assert s.values == [10.0]

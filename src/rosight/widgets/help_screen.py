@@ -27,8 +27,15 @@ HELP_TEXT = """\
 | `i` | topic info & QoS endpoints |
 | `h` | hz monitor |
 | `b` | bandwidth monitor |
+| `v` | view image preview (sensor_msgs/Image, CompressedImage) |
 | `P` | publish (form) |
 | `space` | pause / resume echo |
+
+## Message tree (inside Topics)
+| key | action |
+|-----|--------|
+| `p` | plot selected numeric field |
+| `enter` | scalar leaf → plot, numeric array → snapshot plot, else expand |
 
 ## Plot
 | key | action |
@@ -38,7 +45,15 @@ HELP_TEXT = """\
 | `+` / `-` | extend / shrink time window |
 | `c` | clear all series |
 | `l` | toggle legend |
-| `s` | export CSV |
+| `s` | export CSV (time + snapshot series) |
+
+## Image preview (modal)
+| key | action |
+|-----|--------|
+| `space` | pause / resume rendering |
+| `m` | cycle colormap (turbo → viridis → gray) for depth |
+| `s` | save current frame as PNG to cwd |
+| `q` / `esc` | close |
 
 ## Parameters
 | key | action |
@@ -58,7 +73,9 @@ HELP_TEXT = """\
 | command | action |
 |---------|--------|
 | `topic <filter>` | jump to Messages and set filter |
-| `plot <topic> <field>` | add series to plot |
+| `plot <topic> <field>` | add scalar series to plot |
+| `plot-array <topic> <field>` | add 1D-array snapshot series to plot |
+| `view <topic>` | open image preview for an Image / CompressedImage topic |
 | `record` | jump to Bags |
 | `domain <N>` | restart rclpy on ROS_DOMAIN_ID `N` (0..232) |
 | `quit` | exit the app |

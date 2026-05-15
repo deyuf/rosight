@@ -36,6 +36,7 @@ class TopicsPanel(Vertical):
         Binding("i", "info", "Info"),
         Binding("h", "hz", "Hz"),
         Binding("b", "bw", "BW"),
+        Binding("v", "view_image", "View image"),
         Binding("space", "toggle_pause", "Pause"),
         Binding("P", "publish", "Publish"),
         Binding("/", "filter", "Filter"),
@@ -271,6 +272,28 @@ class TopicsPanel(Vertical):
             severity="warning",
         )
 
+    def action_view_image(self) -> None:
+        """Open a modal image preview if the selected topic is an image type."""
+        from rosight.widgets.image_screen import IMAGE_TYPES, ImagePreviewScreen
+
+        topic = self.selected_topic
+        ros = self.ros
+        if not topic:
+            self.app_.push_status("select a topic first")
+            return
+        if ros is None or not ros.started:
+            self.app_.push_status("ROS not connected — cannot view image")
+            return
+        ti = next((t for t in self._topic_cache if t.name == topic), None)
+        if ti is None or not ti.types:
+            self.app_.notify(f"no type for {topic!r}", severity="warning")
+            return
+        type_name = ti.primary_type
+        if type_name not in IMAGE_TYPES:
+            self.app_.push_status(f"{topic} is {type_name}, not an image topic")
+            return
+        self.app_.push_screen(ImagePreviewScreen(ros, topic, type_name))
+
     def _refresh_detail(self) -> None:
         # 4 Hz timer — silently no-op when the tab is hidden so we don't
         # burn CPU walking the message tree for a panel nobody is looking at.
@@ -310,7 +333,13 @@ class TopicsPanel(Vertical):
         self,
         event: MessageTree.FieldSelected,  # type: ignore[name-defined]
     ) -> None:
-        if not event.is_numeric or not self.selected_topic:
+        if not self.selected_topic:
+            return
+        if event.kind == "array":
+            self.app_.add_plot_snapshot_series(self.selected_topic, event.path)
+            self.app_.push_status(f"plot (snap) += {self.selected_topic}/{event.path}")
+            return
+        if not event.is_numeric:
             self.app_.push_status(f"field {event.path} is not numeric — skipped")
             return
         self.app_.add_plot_series(self.selected_topic, event.path)

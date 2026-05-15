@@ -26,15 +26,20 @@ Nine tabs, keyboard-driven, all on one screen:
 
 | `#` | Tab | What you can do |
 |---|---|---|
-| `1` | **Messages** | Filter the topic table, `Enter` to subscribe, the right pane shows live hz / bw / jitter and the message tree. Press `i` for static topic info (types, publishers, QoS). |
+| `1` | **Messages** | Filter the topic table, `Enter` to subscribe, the right pane shows live hz / bw / jitter and the message tree. Press `i` for static topic info (types, publishers, QoS). Press `v` to open a live image preview for `sensor_msgs/Image` / `CompressedImage` topics. |
 | `2` | **Nodes** | Discover every node, drill into its publishers, subscribers, service servers/clients, action servers/clients. |
 | `3` | **Services** | List services with types. `c` opens a call form *(planned)*. |
 | `4` | **Actions** | List action servers with types. Goal monitor *(planned)*. |
 | `5` | **Params** | Browse parameters per node, get / set with type awareness. |
-| `6` | **Plot** | Multi-series live plot of any numeric field — pick a field in the message tree and press `p`. Pause / window-scale / CSV export. |
+| `6` | **Plot** | Multi-series live plot — scalar time-series **and** 1D-array snapshots (e.g. LaserScan `ranges`). Pick a numeric leaf or numeric array in the message tree and press `p` / `Enter`. Pause / window-scale / CSV export. |
 | `7` | **TF** | Auto-built frame tree from `/tf` and `/tf_static`. |
 | `8` | **Bags** | `ros2 bag record` / `play` / `info`. The header tells you which key stops the recording while it's running. |
 | `9` | **Interfaces** | Browse `msg` / `srv` / `action` definitions of every interface package on the system. |
+
+Image rendering uses the terminal's native graphics protocol when
+available (kitty / sixel / iTerm2) and falls back to Unicode half-blocks
+otherwise — see [docs/plotting.md](docs/plotting.md#images-rgb-depth-compressed)
+for the support matrix.
 
 ### Screenshots
 
