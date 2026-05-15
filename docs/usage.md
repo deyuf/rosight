@@ -40,6 +40,16 @@ In the message tree:
 - Arrow keys / `j` / `k` to navigate.
 - `Enter` or `p` on a numeric leaf — adds it to the **Plot** panel and jumps
   there.
+- `Enter` on a numeric array container (look for the green `[plot ↵]`
+  marker, e.g. `ranges` on a LaserScan) — plots the array as a
+  value-vs-index snapshot in the Plot panel.
+
+Additional Topics-level keys:
+
+- `v` on a `sensor_msgs/Image` or `sensor_msgs/CompressedImage` topic —
+  opens the image preview modal (RGB / depth-colormapped / decoded JPEG/PNG).
+  Inside the modal: `space` pause, `m` cycle colormap, `s` save PNG, `q`/`Esc`
+  close.
 
 ### Nodes (`2`)
 
@@ -67,17 +77,27 @@ Set/diff/yank are wired in the command palette and on the roadmap.
 
 ### Plot (`6`)
 
-The flagship feature. Each series corresponds to one `(topic, field_path)`
-tuple, sampled at the panel's refresh rate.
+The flagship feature. Two kinds of series coexist:
+
+- **Scalar time-series** — one `(topic, field_path)` tuple, sampled at the
+  panel's refresh rate; X axis is seconds-from-now.
+- **1D-array snapshot** — the latest frame of a numeric array
+  (LaserScan ranges, JointState positions, etc.); X axis is array index.
+
+When both kinds are present the chart splits into two stacked subplots.
+
+Keys:
 
 - `Space` — pause/resume
 - `+` / `-` — extend/shrink the time window
 - `c` — clear all series
 - `l` — toggle legend
 - `d` — delete the highlighted series
-- `s` — export all series to a timestamped CSV in the current directory
+- `s` — export all series to a timestamped CSV (column `kind` is
+  `time` or `snapshot`)
 
-See [the plotting guide](plotting.md) for tips and tricks.
+See [the plotting guide](plotting.md) for array snapshots, image previews
+and terminal-protocol notes.
 
 ### TF (`7`)
 
@@ -108,6 +128,8 @@ Press `:` to open a single-line command bar (vim-style). Examples:
 ```text
 :topic /scan        # filter Topics panel
 :plot /odom twist.twist.linear.x
+:plot-array /scan ranges
+:view /camera/image_raw
 :record /odom /scan
 :quit
 ```

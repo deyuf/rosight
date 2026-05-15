@@ -6,7 +6,7 @@ import csv
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -16,7 +16,10 @@ from textual.widgets import DataTable, Static
 from rosight.utils.datatable import fit_last_column_when_ready
 from rosight.utils.formatting import format_value
 from rosight.utils.path import get_value, parse_path
-from rosight.widgets.plot_view import PlotView
+from rosight.widgets.plot_view import PlotSeries, PlotView, SnapshotSeries
+
+SeriesKind = Literal["scalar", "array"]
+MAX_SNAPSHOT_LEN = 4096
 
 if TYPE_CHECKING:
     from rosight.app import RosightApp
@@ -53,8 +56,8 @@ class PlotPanel(Vertical):
 
     def __init__(self) -> None:
         super().__init__()
-        # mapping: series_label -> (topic, field_path)
-        self._sources: dict[str, tuple[str, str]] = {}
+        # mapping: series_label -> (topic, field_path, kind)
+        self._sources: dict[str, tuple[str, str, SeriesKind]] = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="plot-area"):
@@ -92,23 +95,34 @@ class PlotPanel(Vertical):
         label = f"{topic}/{field_path}"
         if label in self._sources:
             return label
-        self._sources[label] = (topic, field_path)
+        self._sources[label] = (topic, field_path, "scalar")
         self.plot.add_series(label)
-        # Make sure we are subscribed.
+        self._auto_subscribe(topic)
+        return label
+
+    def add_snapshot_series(self, topic: str, field_path: str) -> str:
+        label = f"{topic}/{field_path}"
+        if label in self._sources:
+            return label
+        self._sources[label] = (topic, field_path, "array")
+        self.plot.add_snapshot_series(label)
+        self._auto_subscribe(topic)
+        return label
+
+    def _auto_subscribe(self, topic: str) -> None:
         ros = self.ros
         if ros is not None and ros.started and ros.get_subscription(topic) is None:
             try:
                 ros.subscribe(topic)
             except Exception:
                 log.exception("auto-subscribe failed for %s", topic)
-        return label
 
     def _sample(self) -> None:
         ros = self.ros
         if ros is None or not ros.started or not self._sources:
             return
         ts = time.monotonic()
-        for label, (topic, field_path) in self._sources.items():
+        for label, (topic, field_path, kind) in self._sources.items():
             sub = ros.get_subscription(topic)
             if sub is None or sub.last_msg is None:
                 continue
@@ -117,24 +131,46 @@ class PlotPanel(Vertical):
                 value = get_value(sub.last_msg, steps)
             except Exception:
                 continue
-            if isinstance(value, bool):
-                self.plot.push(label, 1.0 if value else 0.0, ts)
-            elif isinstance(value, (int, float)):
-                self.plot.push(label, float(value), ts)
+            if kind == "scalar":
+                if isinstance(value, bool):
+                    self.plot.push(label, 1.0 if value else 0.0, ts)
+                elif isinstance(value, (int, float)):
+                    self.plot.push(label, float(value), ts)
+            elif kind == "array" and (
+                isinstance(value, (list, tuple)) or hasattr(value, "__iter__")
+            ):
+                try:
+                    arr = list(value)
+                except Exception:
+                    continue
+                if len(arr) > MAX_SNAPSHOT_LEN:
+                    arr = arr[:MAX_SNAPSHOT_LEN]
+                try:
+                    floats = [float(v) for v in arr]
+                except (TypeError, ValueError):
+                    continue
+                self.plot.push_snapshot(label, floats, ts)
 
     def _refresh_table(self) -> None:
         if self.region.width == 0:
             return
         st = self.query_one("#side-table", DataTable)
         st.clear()
-        for label in self._sources:
+        for label, (_topic, _path, kind) in self._sources.items():
             series = self.plot.series.get(label)
-            stat = series.stats() if series else None
             cur_text = "—"
-            if stat:
-                _, _, _, latest = stat
-                cur_text = format_value(latest)
-            st.add_row(_truncate(label, 28), cur_text, key=label)
+            if isinstance(series, PlotSeries):
+                stat = series.stats()
+                if stat:
+                    _, _, _, latest = stat
+                    cur_text = format_value(latest)
+            elif isinstance(series, SnapshotSeries):
+                stat = series.stats()
+                if stat:
+                    mn, mx, ln = stat
+                    cur_text = f"n={ln} [{format_value(mn)}…{format_value(mx)}]"
+            suffix = " (snap)" if kind == "array" else ""
+            st.add_row(_truncate(label + suffix, 28), cur_text, key=label)
 
     # -------- key actions ----------------------------------------------
 
@@ -179,13 +215,15 @@ class PlotPanel(Vertical):
         try:
             with out.open("w", newline="") as f:
                 w = csv.writer(f)
-                w.writerow(["timestamp", "label", "value"])
+                w.writerow(["kind", "x", "label", "value"])
                 for label in self._sources:
                     series = self.plot.series.get(label)
-                    if series is None:
-                        continue
-                    for ts, v in series.buffer.snapshot():
-                        w.writerow([ts, label, v])
+                    if isinstance(series, PlotSeries):
+                        for ts, v in series.buffer.snapshot():
+                            w.writerow(["time", ts, label, v])
+                    elif isinstance(series, SnapshotSeries):
+                        for i, v in enumerate(series.values):
+                            w.writerow(["snapshot", i, label, v])
             self.app_.push_status(f"saved {out.name}")
         except Exception as e:
             self.app_.push_status(f"save failed: {e}")

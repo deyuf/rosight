@@ -25,6 +25,7 @@ class FieldEntry:
     value: Any
     type_name: str
     is_numeric: bool
+    is_array_numeric: bool = False
 
     @property
     def depth(self) -> int:
@@ -85,11 +86,18 @@ def get_action_class(type_name: str):
     return getattr(module, name)
 
 
-def iter_fields(msg: Any, _prefix: str = "", _depth: int = 0) -> Iterator[FieldEntry]:
+def iter_fields(
+    msg: Any,
+    _prefix: str = "",
+    _depth: int = 0,
+    _declared_type: str | None = None,
+) -> Iterator[FieldEntry]:
     """Yield :class:`FieldEntry` for every leaf and container of ``msg``.
 
     Containers (nested messages, lists) are emitted as well so the tree view
-    can display them. ``is_numeric`` is true for plottable scalar leaves.
+    can display them. ``is_numeric`` is true for plottable scalar leaves;
+    ``is_array_numeric`` is true for sequence/array containers whose element
+    type is numeric (LaserScan ranges, JointState position, ...).
     """
     if _depth > 32:
         return  # safety: avoid pathological self-references
@@ -113,15 +121,32 @@ def iter_fields(msg: Any, _prefix: str = "", _depth: int = 0) -> Iterator[FieldE
             yield from iter_fields(v, child, _depth + 1)
         return
 
-    if isinstance(msg, (list, tuple)):
+    if _is_array_like(msg):
+        # ``msg`` may be a list, tuple, or array.array (rclpy uses the latter
+        # for typed primitive sequences). Cap previewed elements at 64.
+        try:
+            length = len(msg)
+        except TypeError:
+            length = 0
         if _prefix:
-            yield FieldEntry(_prefix, f"<{len(msg)} items>", _array_type(msg), False)
-        # Limit per-element expansion to keep the tree usable for big arrays.
-        for i, v in enumerate(msg[:64]):
+            type_str = _declared_type or _array_type(msg)
+            is_num_array = (
+                _is_numeric_type(_declared_type)
+                if _declared_type is not None
+                else _runtime_array_is_numeric(msg)
+            )
+            yield FieldEntry(
+                _prefix,
+                f"<{length} items>",
+                type_str,
+                False,
+                is_array_numeric=is_num_array,
+            )
+        for i, v in enumerate(_take(msg, 64)):
             child = f"{_prefix}[{i}]"
             yield from iter_fields(v, child, _depth + 1)
-        if len(msg) > 64:
-            yield FieldEntry(f"{_prefix}[...]", f"<+{len(msg) - 64} more>", "...", False)
+        if length > 64:
+            yield FieldEntry(f"{_prefix}[...]", f"<+{length - 64} more>", "...", False)
         return
 
     # ROS message: prefer ``get_fields_and_field_types`` if present.
@@ -140,8 +165,12 @@ def iter_fields(msg: Any, _prefix: str = "", _depth: int = 0) -> Iterator[FieldE
         for fname, ftype in fields.items():
             value = getattr(msg, fname, None)
             child = f"{_prefix}.{fname}" if _prefix else fname
-            # If primitive (per ROS metadata) emit a leaf directly.
-            if _is_primitive_type(ftype):
+            # Sequence types ("sequence<float32>", "float32[N]") are
+            # primitive-per-element but at runtime arrive as lists/tuples;
+            # walk them so the array container gets ``is_array_numeric``.
+            if _is_sequence_type(ftype) and _is_array_like(value):
+                yield from iter_fields(value, child, _depth + 1, _declared_type=ftype)
+            elif _is_primitive_type(ftype):
                 yield FieldEntry(
                     path=child,
                     value=value,
@@ -158,6 +187,49 @@ def iter_fields(msg: Any, _prefix: str = "", _depth: int = 0) -> Iterator[FieldE
     for k, v in vars(msg).items() if hasattr(msg, "__dict__") else []:
         child = f"{_prefix}.{k}" if _prefix else k
         yield from iter_fields(v, child, _depth + 1)
+
+
+def _is_array_like(obj: Any) -> bool:
+    """True for list, tuple, or array.array (rclpy typed primitive seqs).
+
+    Excludes strings/bytes which would otherwise satisfy the iterable check.
+    """
+    import array as _array
+
+    return isinstance(obj, (list, tuple, _array.array))
+
+
+def _take(seq: Any, n: int) -> list[Any]:
+    """Return at most ``n`` items from ``seq`` without copying the whole thing."""
+    out: list[Any] = []
+    for i, v in enumerate(seq):
+        if i >= n:
+            break
+        out.append(v)
+    return out
+
+
+def _runtime_array_is_numeric(seq: Any) -> bool:
+    """Heuristic for plain Python lists with no parent ROS metadata."""
+    try:
+        if not len(seq):
+            return False
+        first = next(iter(seq))
+    except (TypeError, StopIteration):
+        return False
+    return isinstance(first, (int, float, bool)) and not isinstance(first, str)
+
+
+def _is_numeric_sequence_type(ros_type: str) -> bool:
+    """True for ``sequence<numeric>`` or ``numeric[]`` style declarations."""
+    if "sequence<" in ros_type or "[" in ros_type:
+        return _is_numeric_type(ros_type)
+    return False
+
+
+def _is_sequence_type(ros_type: str) -> bool:
+    """True for any sequence/array declaration regardless of element type."""
+    return "sequence<" in ros_type or "[" in ros_type
 
 
 def _short_type(obj: Any) -> str:

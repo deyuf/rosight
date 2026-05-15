@@ -21,7 +21,9 @@ running app for the same reference.
 | Command | Action |
 |---------|--------|
 | `topic <filter>` | jump to Messages and set the filter |
-| `plot <topic> <field>` | add a series to the plot directly |
+| `plot <topic> <field>` | add a scalar time-series to the plot directly |
+| `plot-array <topic> <field>` | add a 1D-array snapshot series to the plot |
+| `view <topic>` | open the image preview modal for an Image / CompressedImage topic |
 | `record` | jump to Bags |
 | `domain <N>` | reconnect rclpy on `ROS_DOMAIN_ID=N` (0..232); subscriptions are cleared |
 | `quit` | exit |
@@ -34,6 +36,7 @@ running app for the same reference.
 | `i` | static topic info (types, publishers, subscribers, QoS) shown in the side info area — stays put across refresh ticks |
 | `h` | hz monitor (auto-subscribes) |
 | `b` | bandwidth monitor (auto-subscribes) |
+| `v` | open image preview modal (only for `sensor_msgs/Image` / `CompressedImage`) |
 | `Space` | pause / resume tree refresh |
 | `P` | publish (form — planned, shows a toast for now) |
 | `/` | filter |
@@ -43,7 +46,7 @@ In the message tree:
 | Key | Action |
 |-----|--------|
 | arrows / `Space` | navigate, expand / collapse a sub-message |
-| `Enter` | expand a non-leaf; on a leaf, treat like `p` |
+| `Enter` | expand a non-leaf; on a numeric leaf, plot as time-series; on a numeric **array** (`[plot ↵]` marker), plot as snapshot |
 | `p` | add the highlighted numeric leaf to the Plot panel (non-numeric → toast) |
 
 ## Nodes panel (`2`)
@@ -86,7 +89,20 @@ In the message tree:
 | `c` | clear all series |
 | `l` | toggle legend |
 | `d` | delete highlighted series |
-| `s` | export all series to CSV |
+| `s` | export all series to CSV (`kind` column distinguishes time vs snapshot) |
+
+When the panel has both scalar and snapshot series, the chart splits into
+two stacked subplots: time-series on top (X = seconds-from-now), snapshot
+on the bottom (X = array index). See [plotting deep-dive](plotting.md).
+
+## Image preview modal (over Topics, opened with `v`)
+
+| Key | Action |
+|-----|--------|
+| `Space` | pause / resume rendering (decode stays cached) |
+| `m` | cycle colormap for depth (`turbo` → `viridis` → `gray`); ignored for color/compressed |
+| `s` | save the current frame as `rosight-<topic>-<ts>.png` in cwd |
+| `q` / `Esc` | close (releases the subscription if no one else holds it) |
 
 ## TF panel (`7`)
 

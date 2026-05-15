@@ -3,6 +3,17 @@
 The Plot panel is the headline feature: live, multi-series, terminal-native
 plotting of any numeric field exposed by any subscribed topic.
 
+Three flavours coexist in the same tab:
+
+- **Scalar time-series** — pick a numeric leaf field (e.g.
+  `twist.linear.x`); plotted as Y-vs-time on a scrolling window.
+- **1D-array snapshot** — pick a numeric array field (e.g.
+  `ranges` from a `sensor_msgs/LaserScan`); plotted as Y-vs-index, the
+  latest frame on every refresh.
+- **Image preview** — for `sensor_msgs/Image` / `CompressedImage` topics,
+  press **v** in the Topics tab to open a modal preview (see
+  [Images](#images-rgb-depth-compressed) below).
+
 ## Adding a series — the workflow
 
 The Plot panel **does not** auto-plot every subscribed topic; it plots
@@ -100,3 +111,77 @@ not wall-clock.
   topic has no live publisher — check the Topics panel.
 - For long captures, consider exporting CSV and post-processing in pandas
   rather than holding huge buffers in memory.
+
+## 1D-array snapshot plotting
+
+Pick a numeric *array* field — e.g. `ranges` on `sensor_msgs/LaserScan`,
+`position` on `sensor_msgs/JointState`, `data` on `std_msgs/Float64MultiArray`
+— and the plotter shows the whole array as a value-vs-index curve, refreshed
+every frame.
+
+How to add:
+
+1. Subscribe (`Enter`) to the topic in the Topics tab.
+2. In the message tree, navigate to the array field. Numeric arrays show
+   the `<N items>` marker plus a green `[plot ↵]` hint.
+3. Press **Enter** (or `p`) on the array node.
+
+Or use the command palette:
+
+```text
+:plot-array /scan ranges
+```
+
+The Plot tab shows:
+
+- **One kind only** — single chart, X axis is array index.
+- **Mixed time-series and snapshot** — two stacked subplots, top is
+  time-series (X = seconds-from-now), bottom is snapshot (X = index).
+- The side table lists each series; snapshot rows show `n=N [min…max]`.
+- CSV export writes a `kind` column distinguishing `time` and `snapshot`
+  rows so post-processing in pandas can split them.
+
+Caps: arrays longer than 4096 elements are truncated to the first 4096
+points (so an Image's `data` array still draws — just not very usefully).
+
+## Images: RGB, depth, compressed
+
+For `sensor_msgs/Image` or `sensor_msgs/CompressedImage` topics, press
+**v** in the Topics tab to open a modal preview. Supported encodings:
+
+| encoding | rendering |
+|----------|-----------|
+| `rgb8`, `bgr8`, `rgba8`, `bgra8` | direct color |
+| `mono8` | grayscale |
+| `mono16` | normalized → false-color colormap |
+| `32FC1` | depth in metres → normalized → colormap; NaN/Inf masked |
+| jpeg / png (CompressedImage) | Pillow decodes (sniffs magic bytes) |
+
+Inside the modal:
+
+- **space** — pause / resume rendering
+- **m** — cycle colormap (turbo → viridis → gray) for depth-like images
+- **s** — save the current frame as a PNG in the working directory
+- **q** / **esc** — close
+
+Rendering throttles to ~5 Hz regardless of publish rate.
+
+### Terminal protocol fallback
+
+`textual-image` auto-detects what the terminal supports:
+
+| terminal | rendering |
+|----------|-----------|
+| Kitty, WezTerm, foot | Kitty graphics protocol (pixel-perfect) |
+| iTerm2, xterm with sixel, Windows Terminal | Sixel |
+| anything else (xterm, screen, stripped tmux) | Unicode half-block (visible but pixelated) |
+
+Inside `tmux`, you need `set -g allow-passthrough on` (tmux ≥ 3.3) and a
+graphics-capable inner terminal for the pixel protocols to work; otherwise
+you'll see the half-block fallback automatically.
+
+### Plotting array fields *of* image messages
+
+You *can* press Enter on an `Image.data` field — the snapshot plotter will
+draw the first 4096 raw bytes as a line. That's almost never what you
+want; use **v** on the topic itself instead.

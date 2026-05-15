@@ -61,3 +61,18 @@ def test_field_entry_immutable():
     e = FieldEntry(path="a", value=1, type_name="int", is_numeric=True)
     with pytest.raises(Exception):
         e.path = "b"  # type: ignore[misc]
+
+
+def test_field_entry_default_is_array_numeric_false():
+    e = FieldEntry(path="a", value=1, type_name="int", is_numeric=True)
+    assert e.is_array_numeric is False
+
+
+def test_iter_fields_array_numeric_runtime():
+    entries = {e.path: e for e in iter_fields({"vals": [1.0, 2.0, 3.0]})}
+    assert entries["vals"].is_array_numeric is True
+
+
+def test_iter_fields_string_array_not_array_numeric():
+    entries = {e.path: e for e in iter_fields({"names": ["a", "b"]})}
+    assert entries["names"].is_array_numeric is False
