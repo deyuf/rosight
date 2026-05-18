@@ -207,9 +207,14 @@ class RosightApp(App[int]):
 
     def _refresh_status(self) -> None:
         bar = self.query_one("#status", StatusBar)
-        bar.backend_ok = self.backend_ok and self.ros.started
-        bar.domain_id = self.ros.domain_id
-        if not self.ros.started:
+        # The status ticker fires on a timer and is independent of test
+        # setup/teardown ordering. Tests sometimes swap ``self.ros`` for a
+        # minimal stub that mimics only the methods they exercise, so reach
+        # for attributes defensively rather than assuming a full RosBackend.
+        started = getattr(self.ros, "started", False)
+        bar.backend_ok = self.backend_ok and started
+        bar.domain_id = getattr(self.ros, "domain_id", None)
+        if not started:
             return
         try:
             bar.topics = len(self.ros.list_topics())
