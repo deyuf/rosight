@@ -79,6 +79,38 @@ include = [
     "docs",
 ]
 
+# -- automated release --------------------------------------------------------
+# python-semantic-release reads conventional commits since the last tag,
+# decides the bump (feat → minor, fix/perf → patch, BREAKING CHANGE → major,
+# docs/ci/chore/style/test → no release), updates the version, tags it,
+# pushes a chore(release) commit, and emits ``released=true`` so the CI
+# workflow can hand the built dists to PyPI Trusted Publishing.
+# Docs: https://python-semantic-release.readthedocs.io/
+[tool.semantic_release]
+version_variables = ["src/rosight/version.py:__version__"]
+build_command = "python -m build"
+commit_message = "chore(release): {version} [skip ci]"
+tag_format = "v{version}"
+upload_to_pypi = false      # PyPI handled separately via trusted publishing.
+upload_to_vcs_release = true
+major_on_zero = false       # Don't treat pre-1.0 ``feat`` as a major bump.
+allow_zero_version = true
+commit_parser = "conventional"
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+[tool.semantic_release.changelog]
+exclude_commit_patterns = [
+    "^chore\\(release\\):",   # don't list the release commits themselves
+    "^Merge ",
+]
+
+[tool.semantic_release.remote.token]
+env = "GH_TOKEN"
+# ----------------------------------------------------------------------------
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

@@ -77,11 +77,47 @@ new method:
 
 ## Releasing
 
-1. Bump `__version__` in `src/rosight/version.py`.
-2. Update `CHANGELOG.md`.
-3. Tag `vX.Y.Z` and push tags. The `release.yml` workflow builds, attaches
-   artifacts to a GitHub release, and publishes to PyPI via trusted
-   publishing.
+Releases are **automatic**. Every push to `main` that passes CI is fed to
+`python-semantic-release`, which looks at the conventional commits since
+the last tag and decides what to do.
+
+| Commit type | Effect |
+|-------------|--------|
+| `feat: …` | minor bump (`0.1.x` → `0.2.0`) |
+| `fix: …` / `perf: …` | patch bump (`0.1.1` → `0.1.2`) |
+| `<anything>!: …` or body contains `BREAKING CHANGE:` | major bump |
+| `docs: …` / `ci: …` / `chore: …` / `style: …` / `test: …` / `refactor: …` / `build: …` | no release |
+
+When there's at least one bumping commit since the last tag, the
+`publish` job in `ci.yml`:
+
+1. updates `src/rosight/version.py` and `CHANGELOG.md`,
+2. commits the bump as `chore(release): X.Y.Z [skip ci]` (the
+   `[skip ci]` keyword prevents a self-trigger loop),
+3. pushes a `vX.Y.Z` tag,
+4. creates a GitHub Release with auto-generated notes,
+5. uploads the built sdist + wheel to PyPI via Trusted Publishing
+   (configured once on PyPI; see `release.yml` for the legacy
+   tag-triggered path).
+
+Pure-docs / pure-CI / pure-chore pushes produce no release — the job
+just logs `no version-bumping commits since last tag` and exits.
+
+**Conventional-commit etiquette:**
+
+```text
+feat(plot): add 1D-array snapshot plotting
+fix(image-preview): stop shadowing Widget._render
+docs(plotting): explain colormap fallback
+ci(release): wire python-semantic-release
+chore(deps): bump textual to 8.3
+```
+
+If you need to ship something manually (hotfix while CI is down, etc.),
+the legacy path still works: `release.yml` triggers on `v*.*.*` tag
+push and `workflow_dispatch`. The auto-pipeline's tag pushes don't
+re-fire it (GitHub doesn't re-trigger workflows from
+`GITHUB_TOKEN`-pushed refs).
 
 ## Style
 
@@ -96,6 +132,6 @@ Three workflows:
 
 | File | Trigger | Job |
 |------|---------|-----|
-| `ci.yml` | push / PR | lint, tests on 3.10–3.12, build, ROS integration on Humble + Jazzy |
-| `release.yml` | tag `v*.*.*` | build, GitHub release, PyPI publish |
+| `ci.yml` | push / PR | lint, tests on 3.10–3.12, build, ROS integration on Humble + Jazzy, `publish` job on main pushes |
+| `release.yml` | tag `v*.*.*`, `workflow_dispatch` | legacy / manual emergency release path |
 | `docs.yml` | push to main on docs/ | mkdocs build + deploy to Pages |
