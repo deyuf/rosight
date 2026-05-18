@@ -11,7 +11,10 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel in-progress runs for PRs and feature branches, but never for
+  # main — the publish job tags + uploads to PyPI and must not be
+  # interrupted half-way.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   lint:
@@ -88,6 +91,71 @@ jobs:
         with:
           name: dist
           path: dist/*
+
+  publish:
+    # Automated release on every passing main push.
+    #
+    # python-semantic-release looks at the conventional commits since the
+    # last tag. If none are version-bumping (``feat`` / ``fix`` / ``perf`` /
+    # ``BREAKING CHANGE``), it exits with ``released=false`` and we don't
+    # touch PyPI — so a docs-only or ci-only push is a no-op here.
+    #
+    # When it does decide to release:
+    #   1. updates ``src/rosight/version.py`` and ``CHANGELOG.md``,
+    #   2. commits the bump with ``[skip ci]`` so we don't loop,
+    #   3. tags ``v<version>`` and pushes,
+    #   4. creates a GitHub Release with auto-generated notes,
+    #   5. the next step uploads the built dists to PyPI via Trusted
+    #      Publishing (configured in the ``pypi`` environment).
+    name: Release & publish
+    runs-on: ubuntu-latest
+    needs: [lint, test, build]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      !contains(github.event.head_commit.message, 'chore(release):')
+    permissions:
+      contents: write       # tag + commit version bump + GitHub Release
+      id-token: write       # PyPI trusted publishing
+    environment:
+      name: pypi
+      url: https://pypi.org/p/rosight
+    concurrency:
+      group: publish-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0      # semantic-release walks the full commit history
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+      - name: Python Semantic Release
+        id: release
+        uses: python-semantic-release/python-semantic-release@v10
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish to PyPI (trusted publishing)
+        if: steps.release.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          skip-existing: true
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ steps.release.outputs.released }}" = "true" ]; then
+            echo "✅ released ${{ steps.release.outputs.version }} to PyPI"
+          else
+            echo "ℹ️  no version-bumping commits since last tag — nothing to publish"
+          fi
 
   ros-integration:
     # Live integration check against an actual ROS 2 distribution.
