@@ -127,7 +127,7 @@ class ImagePreviewScreen(ModalScreen[None]):
             log.exception("image subscribe failed")
             self._set_header_warning("subscribe failed — see logs")
             return
-        self.set_interval(1.0 / _REFRESH_HZ, self._render)
+        self.set_interval(1.0 / _REFRESH_HZ, self._tick_render)
 
     def on_unmount(self) -> None:
         ros = self.ros
@@ -160,8 +160,12 @@ class ImagePreviewScreen(ModalScreen[None]):
         self._latest_msg_ts = time.monotonic()
 
     # ----- render (Textual loop) ------------------------------------------
+    # NOTE: do NOT rename to ``_render`` — Textual's ``Widget._render`` is
+    # the method that returns the screen's ``Visual``. Shadowing it makes
+    # rendering return ``None`` and the whole screen blow up with
+    # ``'NoneType' object has no attribute 'render_strips'``.
 
-    def _render(self) -> None:
+    def _tick_render(self) -> None:
         if self._paused:
             return
         msg = self._latest_msg
@@ -257,7 +261,7 @@ class ImagePreviewScreen(ModalScreen[None]):
             return
         self._colormap_idx = (self._colormap_idx + 1) % len(_COLORMAPS)
         # Force a re-render with the new colormap.
-        self._render()
+        self._tick_render()
 
     def action_save(self) -> None:
         if self._last_decoded is None:
