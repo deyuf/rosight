@@ -195,3 +195,27 @@ def test_decode_compressed_empty_returns_none():
 def test_decode_compressed_garbage_returns_none():
     img = decode_compressed_image(_CompMsg("jpeg", b"not an image"))
     assert img is None
+
+
+# ----- regression: don't shadow Textual's Widget._render --------------------
+
+
+def test_image_preview_screen_does_not_shadow_widget_internal_render():
+    """``Widget._render`` returns the screen's ``Visual``. Naming an instance
+    method ``_render`` makes ``self._render()`` return ``None`` and the whole
+    modal explodes with ``'NoneType' object has no attribute 'render_strips'``
+    once a real frame arrives. The previous incarnation of
+    :class:`ImagePreviewScreen` did exactly that; this test guards against the
+    pattern coming back.
+    """
+    pytest.importorskip("textual")
+
+    from textual.widget import Widget
+
+    from rosight.widgets.image_screen import ImagePreviewScreen
+
+    base_render = Widget._render
+    screen_render = ImagePreviewScreen.__dict__.get("_render")
+    # Either we don't define `_render` at all, or it is literally the inherited
+    # one. Both are acceptable; only a *new* override would be a bug.
+    assert screen_render is None or screen_render is base_render
