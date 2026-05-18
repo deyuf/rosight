@@ -88,9 +88,15 @@ include = [
 # Docs: https://python-semantic-release.readthedocs.io/
 [tool.semantic_release]
 version_variables = ["src/rosight/version.py:__version__"]
-build_command = "python -m build"
+# psr runs as a Docker action with its own Python env that doesn't have
+# ``build`` installed. Bootstrap it before invoking the builder; the install
+# is a no-op on subsequent runs because the container is ephemeral anyway.
+build_command = "python -m pip install --quiet build && python -m build"
 commit_message = "chore(release): {version} [skip ci]"
-tag_format = "v{version}"
+# Existing tags + GitHub Releases are named ``0.1.0`` / ``0.1.1`` (no ``v``
+# prefix). Keep that convention so psr can find the last release; otherwise
+# it sees zero history and tries to publish ``0.1.0`` over what's on PyPI.
+tag_format = "{version}"
 upload_to_pypi = false      # PyPI handled separately via trusted publishing.
 upload_to_vcs_release = true
 major_on_zero = false       # Don't treat pre-1.0 ``feat`` as a major bump.

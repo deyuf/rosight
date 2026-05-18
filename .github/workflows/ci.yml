@@ -129,14 +129,6 @@ jobs:
           fetch-depth: 0      # semantic-release walks the full commit history
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install build tooling
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
       - name: Python Semantic Release
         id: release
         uses: python-semantic-release/python-semantic-release@v10
