@@ -6,6 +6,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/rosight.svg)](https://pypi.org/project/rosight/)
 [![Python](https://img.shields.io/pypi/pyversions/rosight.svg)](https://pypi.org/project/rosight/)
+[![Downloads](https://static.pepy.tech/badge/rosight)](https://pepy.tech/project/rosight)
 [![CI](https://github.com/deyuf/rosight/actions/workflows/ci.yml/badge.svg)](https://github.com/deyuf/rosight/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-deyuf.github.io%2Frosight-blue)](https://deyuf.github.io/rosight/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
