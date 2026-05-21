@@ -84,16 +84,23 @@ async def test_add_series_invalid_path_is_rejected_safely(caplog):
     now ``add_series`` validates up front and logs a warning."""
     import logging
 
+    caplog.set_level(logging.WARNING)
     async with _app().run_test(headless=True, size=(120, 30)) as pilot:
         await pilot.pause()
         pilot.app.query_one("TabbedContent").active = "plot"
         await pilot.pause()
         panel = pilot.app.query_one(PlotPanel)
-        with caplog.at_level(logging.WARNING, logger="rosight.widgets.plot_panel"):
-            panel.add_series("/topic", "@#$")
+        panel.add_series("/topic", "@#$")
         # Entry must NOT be in _sources if parsing failed.
         assert "/topic/@#$" not in panel._sources
-        assert "invalid field path" in caplog.text
+        # Inspect records directly — caplog.text can be empty in CI when
+        # the named logger has extra handlers installed.
+        matched = [
+            r.getMessage()
+            for r in caplog.records
+            if r.levelno >= logging.WARNING and "invalid field path" in r.getMessage()
+        ]
+        assert matched, f"no warning logged; records: {caplog.records!r}"
 
 
 def test_sample_reuses_cached_steps(monkeypatch):
