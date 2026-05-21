@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -107,8 +108,21 @@ class BagsPanel(Vertical):
             self._set_recording(False)
             self.app_.notify("recording stopped", title="Bag")
             return
-        args = self.query_one("#record-args", Input).value.split() or ["-a"]
-        out_dir = Path.cwd() / f"rosight-bag-{int(time.time())}"
+        raw_args = self.query_one("#record-args", Input).value.strip()
+        try:
+            # shlex.split handles quoted args ("-x '/scan.*'") and
+            # ``--storage=mcap``-style flags that bare .split() would
+            # otherwise pass through unchanged but inconsistently.
+            args = shlex.split(raw_args) if raw_args else ["-a"]
+        except ValueError as e:
+            self.app_.notify(f"invalid record-args: {e}", severity="warning", title="Bag")
+            return
+        out_dir = self._record_output_dir()
+        try:
+            out_dir.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self.app_.notify(f"can't create output dir: {e}", severity="error", title="Bag")
+            return
         cmd = ["ros2", "bag", "record", "-o", str(out_dir), *args]
         try:
             self._record_proc = subprocess.Popen(cmd, **self._CHILD_KW)
@@ -127,11 +141,33 @@ class BagsPanel(Vertical):
         if not path:
             self.app_.notify("set a bag path first", severity="warning")
             return
+        # Defend against typos and stale paths — ros2 bag's own error
+        # would otherwise scroll past the user in the detached log.
+        bag_path = Path(path).expanduser()
+        if not bag_path.exists():
+            self.app_.notify(f"bag not found: {bag_path}", severity="warning", title="Bag")
+            return
         try:
-            self._play_proc = subprocess.Popen(["ros2", "bag", "play", path], **self._CHILD_KW)
-            self.app_.notify(f"playing {path}", title="Bag")
+            self._play_proc = subprocess.Popen(
+                ["ros2", "bag", "play", str(bag_path)], **self._CHILD_KW
+            )
+            self.app_.notify(f"playing {bag_path.name}", title="Bag")
+        except FileNotFoundError:
+            self.app_.notify("ros2 CLI not found in PATH", severity="error")
         except Exception as e:
             self.app_.notify(f"play failed: {e}", severity="error")
+
+    def _record_output_dir(self) -> Path:
+        """Where to write ``ros2 bag record -o <here>``.
+
+        Honors ``config.ui.bag_output_dir`` when configured; otherwise
+        falls back to the current working directory. Extracted so tests
+        can pin it to a tmp_path without touching the filesystem.
+        """
+        cfg = getattr(getattr(self.app_, "config", None), "ui", None)
+        base = getattr(cfg, "bag_output_dir", None)
+        root = Path(base).expanduser() if base else Path.cwd()
+        return root / f"rosight-bag-{int(time.time())}"
 
     def action_stop(self) -> None:
         stopped = False
@@ -147,9 +183,13 @@ class BagsPanel(Vertical):
         path = self.query_one("#play-path", Input).value.strip()
         if not path:
             return
+        bag_path = Path(path).expanduser()
+        if not bag_path.exists():
+            self.app_.notify(f"bag not found: {bag_path}", severity="warning", title="Bag")
+            return
         try:
             res = subprocess.run(
-                ["ros2", "bag", "info", path],
+                ["ros2", "bag", "info", str(bag_path)],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,

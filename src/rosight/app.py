@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -228,45 +229,102 @@ class RosightApp(App[int]):
 
     # --------------- command palette ---------------
 
+    # Command dispatch table. Each handler receives the parsed args list
+    # and returns ``True`` if it consumed the command (so we don't fall
+    # back to the "unknown command" warning), ``False`` to reject — typ.
+    # because the required arg count wasn't met. Kept as a property so
+    # the bound methods see ``self``.
+    @property
+    def _commands(self) -> dict[str, Callable[[list[str]], bool]]:
+        return {
+            "q": self._cmd_quit,
+            "quit": self._cmd_quit,
+            "exit": self._cmd_quit,
+            "topic": self._cmd_topic,
+            "node": self._cmd_node,
+            "param": self._cmd_param,
+            "plot": self._cmd_plot,
+            "plot-array": self._cmd_plot_array,
+            "view": self._cmd_view,
+            "record": self._cmd_record,
+            "help": self._cmd_help,
+            "domain": self._cmd_domain,
+        }
+
     def _on_command_submitted(self, raw: str | None) -> None:
         if not raw:
             return
         parts = raw.strip().split()
         cmd, args = parts[0], parts[1:]
-        if cmd in ("q", "quit", "exit"):
-            self.exit(0)
-        elif cmd == "topic" and args:
-            self.action_tab("topics")
-            try:
-                tp = self.query_one(TopicsPanel)
-                tp.filter_text = args[0]
-            except Exception:
-                pass
-        elif cmd == "node" and args:
-            self.action_tab("nodes")
-        elif cmd == "param" and len(args) >= 1:
-            self.action_tab("params")
-        elif cmd == "plot" and len(args) >= 2:
-            topic, path = args[0], args[1]
-            self.add_plot_series(topic, path)
-        elif cmd == "plot-array" and len(args) >= 2:
-            topic, path = args[0], args[1]
-            self.add_plot_snapshot_series(topic, path)
-        elif cmd == "view" and len(args) >= 1:
-            try:
-                tp = self.query_one(TopicsPanel)
-                tp.selected_topic = args[0]
-                tp.action_view_image()
-            except Exception:
-                self.push_status(f"could not open image view for {args[0]}")
-        elif cmd == "record":
-            self.action_tab("bags")
-        elif cmd == "help":
-            self.action_help()
-        elif cmd == "domain" and args:
-            self._switch_domain(args[0])
-        else:
+        handler = self._commands.get(cmd)
+        if handler is None or not handler(args):
             self.push_status(f"unknown command: {raw}")
+
+    # ----- individual command handlers -----
+
+    def _cmd_quit(self, _args: list[str]) -> bool:
+        self.exit(0)
+        return True
+
+    def _cmd_topic(self, args: list[str]) -> bool:
+        if not args:
+            return False
+        self.action_tab("topics")
+        try:
+            tp = self.query_one(TopicsPanel)
+            tp.filter_text = args[0]
+        except Exception:
+            pass
+        return True
+
+    def _cmd_node(self, args: list[str]) -> bool:
+        if not args:
+            return False
+        self.action_tab("nodes")
+        return True
+
+    def _cmd_param(self, args: list[str]) -> bool:
+        if not args:
+            return False
+        self.action_tab("params")
+        return True
+
+    def _cmd_plot(self, args: list[str]) -> bool:
+        if len(args) < 2:
+            return False
+        self.add_plot_series(args[0], args[1])
+        return True
+
+    def _cmd_plot_array(self, args: list[str]) -> bool:
+        if len(args) < 2:
+            return False
+        self.add_plot_snapshot_series(args[0], args[1])
+        return True
+
+    def _cmd_view(self, args: list[str]) -> bool:
+        if not args:
+            return False
+        try:
+            tp = self.query_one(TopicsPanel)
+            tp.selected_topic = args[0]
+            tp.action_view_image()
+        except Exception:
+            self.push_status(f"could not open image view for {args[0]}")
+        return True
+
+    def _cmd_record(self, _args: list[str]) -> bool:
+        self.action_tab("bags")
+        return True
+
+    def _cmd_help(self, _args: list[str]) -> bool:
+        self.action_help()
+        return True
+
+    def _cmd_domain(self, args: list[str]) -> bool:
+        if not args:
+            return False
+        self._switch_domain(args[0])
+        return True
 
     def _switch_domain(self, raw_id: str) -> None:
         """Validate the request and hand the blocking restart to a worker.

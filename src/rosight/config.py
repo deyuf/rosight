@@ -44,6 +44,9 @@ class UIConfig:
     refresh_hz: float = 10.0
     discovery_period: float = 1.0  # how often to refresh topic/node lists
     vim_keys: bool = True
+    # Where ``ros2 bag record -o`` should write its output dir. ``None``
+    # → fall back to ``Path.cwd()`` (legacy behavior).
+    bag_output_dir: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
