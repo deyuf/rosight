@@ -79,28 +79,39 @@ async def test_add_snapshot_series_caches_parsed_path():
 
 
 @pytest.mark.asyncio
-async def test_add_series_invalid_path_is_rejected_safely(caplog):
+async def test_add_series_invalid_path_is_rejected_safely():
     """A bad path used to leak ``ValueError`` from ``parse_path`` later;
     now ``add_series`` validates up front and logs a warning."""
     import logging
 
-    caplog.set_level(logging.WARNING)
-    async with _app().run_test(headless=True, size=(120, 30)) as pilot:
-        await pilot.pause()
-        pilot.app.query_one("TabbedContent").active = "plot"
-        await pilot.pause()
-        panel = pilot.app.query_one(PlotPanel)
-        panel.add_series("/topic", "@#$")
-        # Entry must NOT be in _sources if parsing failed.
-        assert "/topic/@#$" not in panel._sources
-        # Inspect records directly — caplog.text can be empty in CI when
-        # the named logger has extra handlers installed.
-        matched = [
-            r.getMessage()
-            for r in caplog.records
-            if r.levelno >= logging.WARNING and "invalid field path" in r.getMessage()
-        ]
-        assert matched, f"no warning logged; records: {caplog.records!r}"
+    # Attach a list handler directly to the panel logger. ``caplog`` is
+    # unreliable in CI's rosight venv (extra handlers absorb records
+    # before propagation reaches caplog's root handler).
+    records: list[logging.LogRecord] = []
+    panel_log = logging.getLogger("rosight.widgets.plot_panel")
+
+    class _H(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    h = _H(level=logging.DEBUG)
+    panel_log.addHandler(h)
+    prev_level = panel_log.level
+    panel_log.setLevel(logging.DEBUG)
+    try:
+        async with _app().run_test(headless=True, size=(120, 30)) as pilot:
+            await pilot.pause()
+            pilot.app.query_one("TabbedContent").active = "plot"
+            await pilot.pause()
+            panel = pilot.app.query_one(PlotPanel)
+            panel.add_series("/topic", "@#$")
+            assert "/topic/@#$" not in panel._sources
+    finally:
+        panel_log.removeHandler(h)
+        panel_log.setLevel(prev_level)
+
+    matched = [r.getMessage() for r in records if "invalid field path" in r.getMessage()]
+    assert matched, f"no warning logged; records: {records!r}"
 
 
 def test_sample_reuses_cached_steps(monkeypatch):
