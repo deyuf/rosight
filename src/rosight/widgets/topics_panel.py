@@ -321,11 +321,13 @@ class TopicsPanel(Vertical):
                 (f"jitter: {rs.jitter_ms:.1f}ms", "green"),
             )
         )
-        if not self.paused and sub.last_msg is not None:
-            stamp = (topic, sub.last_msg_ts)
-            if stamp != self._tree_ts:
-                tree.update_message(sub.last_msg)
-                self._tree_ts = stamp
+        if not self.paused:
+            msg, ts = sub.snapshot()
+            if msg is not None:
+                stamp = (topic, ts)
+                if stamp != self._tree_ts:
+                    tree.update_message(msg)
+                    self._tree_ts = stamp
 
     # ---------------- bridge: forward field selection to plot ----------------
 

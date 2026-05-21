@@ -122,7 +122,7 @@ class ImagePreviewScreen(ModalScreen[None]):
                 self.ros.subscribe(self.topic, self.type_name, on_message=self._on_msg)
                 self._owned_subscription = True
             else:
-                existing.callbacks.append(self._on_msg)
+                existing.add_callback(self._on_msg)
         except Exception:
             log.exception("image subscribe failed")
             self._set_header_warning("subscribe failed — see logs")
@@ -138,15 +138,11 @@ class ImagePreviewScreen(ModalScreen[None]):
         except Exception:
             sub = None
         if sub is not None:
-            # Detach our callback if still present.
-            try:
-                if self._on_msg in sub.callbacks:
-                    sub.callbacks.remove(self._on_msg)
-            except Exception:
-                pass
-            # Tear down the subscription only if we created it AND nobody
-            # else is listening — otherwise leave it for the topics panel.
-            if self._owned_subscription and not sub.callbacks:
+            # Detach our callback (no-op if not present) and tear down the
+            # subscription only if we created it AND nobody else is listening
+            # — otherwise leave it for the topics panel.
+            sub.remove_callback(self._on_msg)
+            if self._owned_subscription and sub.callback_count() == 0:
                 try:
                     ros.unsubscribe(self.topic)
                 except Exception:

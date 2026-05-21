@@ -7,6 +7,7 @@ bindings. Each panel is implemented as a self-contained widget under
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from textual.app import App, ComposeResult
@@ -268,11 +269,13 @@ class RosightApp(App[int]):
             self.push_status(f"unknown command: {raw}")
 
     def _switch_domain(self, raw_id: str) -> None:
-        """Re-init the rclpy backend on a new ROS_DOMAIN_ID.
+        """Validate the request and hand the blocking restart to a worker.
 
-        Tears down the executor + node + context and reconnects on the
-        target domain. Any subscriptions are lost — panels rediscover and
-        the user can re-subscribe.
+        Validation (parse + range check) runs synchronously so the user
+        sees the "invalid"/"out of range" warning immediately. The actual
+        rclpy teardown + init goes to :meth:`_apply_domain` running on a
+        worker thread — it can take 100s of ms and would otherwise freeze
+        the Textual loop. Any subscriptions are lost — panels rediscover.
         """
         try:
             new_id = int(raw_id)
@@ -286,8 +289,12 @@ class RosightApp(App[int]):
                 title="Domain",
             )
             return
+        self.push_status(f"switching to DOMAIN_ID={new_id}…")
+        self.run_worker(self._apply_domain(new_id), group="rosight-domain", exclusive=True)
+
+    async def _apply_domain(self, new_id: int) -> None:
         try:
-            self.ros.set_domain_id(new_id)
+            await asyncio.to_thread(self.ros.set_domain_id, new_id)
             self.backend_ok = self.ros.started
             self.notify(
                 f"now on ROS_DOMAIN_ID={new_id}\n(subscriptions cleared)",

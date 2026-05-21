@@ -12,9 +12,14 @@ Goals:
 from __future__ import annotations
 
 import importlib
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
+
+log = logging.getLogger(__name__)
+
+_MAX_DEPTH = 32
 
 PRIMITIVE_TYPES = (bool, int, float, str, bytes)
 
@@ -99,8 +104,15 @@ def iter_fields(
     ``is_array_numeric`` is true for sequence/array containers whose element
     type is numeric (LaserScan ranges, JointState position, ...).
     """
-    if _depth > 32:
-        return  # safety: avoid pathological self-references
+    if _depth > _MAX_DEPTH:
+        # Pathological self-reference or unexpectedly deep nesting — log
+        # once per call site so the user can grep for truncated paths.
+        log.warning(
+            "iter_fields depth limit (%d) exceeded at %r — truncating",
+            _MAX_DEPTH,
+            _prefix or "<root>",
+        )
+        return
 
     # Primitive scalar
     if msg is None or isinstance(msg, PRIMITIVE_TYPES):

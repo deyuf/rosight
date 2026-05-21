@@ -106,6 +106,19 @@ class ParameterValue:
 
 @dataclass
 class Subscription:
+    """Live subscription state shared between the rclpy executor and UI.
+
+    The rclpy callback runs on an executor worker thread; widgets read
+    state from Textual's event loop. ``_lock`` serializes the few moments
+    where both sides touch the same list/fields:
+
+    * the executor appends to ``last_msg`` and iterates ``callbacks``;
+    * widgets add/remove callbacks and snapshot ``last_msg`` + ``last_msg_ts``.
+
+    Access ``last_msg`` directly only when you don't need the timestamp
+    to match the message; otherwise prefer :meth:`snapshot`.
+    """
+
     topic: str
     type_name: str
     rate: RateMonitor = field(default_factory=RateMonitor)
@@ -114,6 +127,30 @@ class Subscription:
     last_msg_ts: float = 0.0
     callbacks: list[Callable[[Any], None]] = field(default_factory=list)
     _handle: Any = None  # rclpy Subscription
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def add_callback(self, cb: Callable[[Any], None]) -> None:
+        """Register a per-message callback. Safe to call from any thread."""
+        with self._lock:
+            self.callbacks.append(cb)
+
+    def remove_callback(self, cb: Callable[[Any], None]) -> bool:
+        """Remove a previously registered callback. Returns True if found."""
+        with self._lock:
+            try:
+                self.callbacks.remove(cb)
+                return True
+            except ValueError:
+                return False
+
+    def callback_count(self) -> int:
+        with self._lock:
+            return len(self.callbacks)
+
+    def snapshot(self) -> tuple[Any, float]:
+        """Return ``(last_msg, last_msg_ts)`` captured atomically."""
+        with self._lock:
+            return self.last_msg, self.last_msg_ts
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +419,7 @@ class RosBackend:
             existing = self._subscriptions.get(topic)
             if existing is not None:
                 if on_message:
-                    existing.callbacks.append(on_message)
+                    existing.add_callback(on_message)
                 return existing
 
             # Resolve type
@@ -407,9 +444,11 @@ class RosBackend:
                 ts = time.monotonic()
                 sub.rate.tick(ts)
                 sub.bandwidth.tick(estimate_msg_size(msg), ts)
-                sub.last_msg = msg
-                sub.last_msg_ts = ts
-                for cb in list(sub.callbacks):
+                with sub._lock:
+                    sub.last_msg = msg
+                    sub.last_msg_ts = ts
+                    cbs = list(sub.callbacks)
+                for cb in cbs:
                     try:
                         cb(msg)
                     except Exception:
@@ -433,7 +472,8 @@ class RosBackend:
             log.exception("destroy_subscription failed")
         finally:
             sub._handle = None
-            sub.callbacks.clear()
+            with sub._lock:
+                sub.callbacks.clear()
 
     def get_subscription(self, topic: str) -> Subscription | None:
         with self._lock:
@@ -486,12 +526,23 @@ class RosBackend:
             if not client.wait_for_service(timeout_sec=timeout):
                 raise TimeoutError(f"service {service!r} unavailable")
             future = client.call_async(request)
-            deadline = time.monotonic() + timeout
-            while not future.done():
-                if time.monotonic() > deadline:
-                    raise TimeoutError(f"service call to {service!r} timed out")
-                time.sleep(0.01)
-            return future.result()
+            # The executor already spins our node on its own thread; we
+            # just need to block until the future completes or we time
+            # out. ``concurrent.futures``-style ``result(timeout=...)`` is
+            # available on rclpy's Future via the same name.
+            try:
+                return future.result(timeout=timeout)
+            except TimeoutError:
+                raise
+            except Exception:
+                # Some rclpy versions don't accept the ``timeout`` kwarg;
+                # fall back to a watch loop with a wakeable Event.
+                deadline = time.monotonic() + timeout
+                done = threading.Event()
+                future.add_done_callback(lambda _f: done.set())
+                if not done.wait(timeout=max(0.0, deadline - time.monotonic())):
+                    raise TimeoutError(f"service call to {service!r} timed out") from None
+                return future.result()
         finally:
             node.destroy_client(client)
 
@@ -534,21 +585,7 @@ class RosBackend:
         from rcl_interfaces.msg import ParameterValue as PV
         from rcl_interfaces.srv import SetParameters
 
-        pv = PV()
-        if isinstance(value, bool):
-            pv.type = 1
-            pv.bool_value = value
-        elif isinstance(value, int):
-            pv.type = 2
-            pv.integer_value = value
-        elif isinstance(value, float):
-            pv.type = 3
-            pv.double_value = value
-        elif isinstance(value, str):
-            pv.type = 4
-            pv.string_value = value
-        else:
-            raise TypeError(f"unsupported parameter type: {type(value).__name__}")
+        pv = _build_param_value(PV(), value)
         req = SetParameters.Request()
         param = Parameter()
         param.name = name
@@ -562,39 +599,71 @@ class RosBackend:
         return all(r.successful for r in resp.results)
 
 
-def _param_type_name(t: int) -> str:  # pragma: no cover
-    return {
-        0: "not_set",
-        1: "bool",
-        2: "integer",
-        3: "double",
-        4: "string",
-        5: "byte_array",
-        6: "bool_array",
-        7: "integer_array",
-        8: "double_array",
-        9: "string_array",
-    }.get(int(t), "unknown")
+# ---------------------------------------------------------------------------
+# rcl_interfaces.msg.ParameterValue (de)serialization
+#
+# A single table drives:
+#   _param_type_name(t)  — int → human name
+#   _param_value(pv)     — ParameterValue → Python value
+#   _build_param_value(pv, value) — Python value → ParameterValue
+#
+# Type IDs come from rcl_interfaces/msg/ParameterType.msg and are stable
+# across distros. Each row: (type_id, human_name, attr_name, container).
+# ``container`` is ``None`` for scalars; for arrays it materializes the
+# stored value into a list when reading.
+# ---------------------------------------------------------------------------
+
+_PARAM_TYPES: tuple[tuple[int, str, str | None, Any], ...] = (
+    (0, "not_set", None, None),
+    (1, "bool", "bool_value", None),
+    (2, "integer", "integer_value", None),
+    (3, "double", "double_value", None),
+    (4, "string", "string_value", None),
+    (5, "byte_array", "byte_array_value", list),
+    (6, "bool_array", "bool_array_value", list),
+    (7, "integer_array", "integer_array_value", list),
+    (8, "double_array", "double_array_value", list),
+    (9, "string_array", "string_array_value", list),
+)
 
 
-def _param_value(v: Any) -> Any:  # pragma: no cover
+def _param_type_name(t: int) -> str:
+    for type_id, name, _attr, _container in _PARAM_TYPES:
+        if type_id == int(t):
+            return name
+    return "unknown"
+
+
+def _param_value(v: Any) -> Any:
     t = int(v.type)
-    if t == 1:
-        return v.bool_value
-    if t == 2:
-        return v.integer_value
-    if t == 3:
-        return v.double_value
-    if t == 4:
-        return v.string_value
-    if t == 5:
-        return list(v.byte_array_value)
-    if t == 6:
-        return list(v.bool_array_value)
-    if t == 7:
-        return list(v.integer_array_value)
-    if t == 8:
-        return list(v.double_array_value)
-    if t == 9:
-        return list(v.string_array_value)
+    for type_id, _name, attr, container in _PARAM_TYPES:
+        if type_id != t:
+            continue
+        if attr is None:
+            return None
+        raw = getattr(v, attr)
+        return container(raw) if container is not None else raw
     return None
+
+
+def _build_param_value(pv: Any, value: Any) -> Any:
+    """Populate an rcl_interfaces ParameterValue from a Python scalar.
+
+    Only scalars are accepted today (bool/int/float/str); arrays would
+    need an explicit element-type hint to disambiguate (``[1, 2]`` could
+    be int or byte array). Order matters: ``bool`` must precede ``int``
+    because ``isinstance(True, int)`` is True.
+    """
+    # (predicate, type_id, attr)
+    rules: tuple[tuple[Callable[[Any], bool], int, str], ...] = (
+        (lambda x: isinstance(x, bool), 1, "bool_value"),
+        (lambda x: isinstance(x, int), 2, "integer_value"),
+        (lambda x: isinstance(x, float), 3, "double_value"),
+        (lambda x: isinstance(x, str), 4, "string_value"),
+    )
+    for pred, type_id, attr in rules:
+        if pred(value):
+            pv.type = type_id
+            setattr(pv, attr, value)
+            return pv
+    raise TypeError(f"unsupported parameter type: {type(value).__name__}")
