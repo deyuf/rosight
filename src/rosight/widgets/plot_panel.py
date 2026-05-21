@@ -15,7 +15,7 @@ from textual.widgets import DataTable, Static
 
 from rosight.utils.datatable import fit_last_column_when_ready
 from rosight.utils.formatting import format_value
-from rosight.utils.path import get_value, parse_path
+from rosight.utils.path import PathStep, get_value, parse_path
 from rosight.widgets.plot_view import PlotSeries, PlotView, SnapshotSeries
 
 SeriesKind = Literal["scalar", "array"]
@@ -56,8 +56,10 @@ class PlotPanel(Vertical):
 
     def __init__(self) -> None:
         super().__init__()
-        # mapping: series_label -> (topic, field_path, kind)
-        self._sources: dict[str, tuple[str, str, SeriesKind]] = {}
+        # mapping: series_label -> (topic, field_path, kind, parsed_steps)
+        # ``parsed_steps`` is the pre-parsed result of ``parse_path`` —
+        # caching it shaves a regex pass per series per sample tick.
+        self._sources: dict[str, tuple[str, str, SeriesKind, list[PathStep]]] = {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="plot-area"):
@@ -95,7 +97,12 @@ class PlotPanel(Vertical):
         label = f"{topic}/{field_path}"
         if label in self._sources:
             return label
-        self._sources[label] = (topic, field_path, "scalar")
+        try:
+            steps = parse_path(field_path)
+        except ValueError:
+            log.warning("invalid field path %r — series not added", field_path)
+            return label
+        self._sources[label] = (topic, field_path, "scalar", steps)
         self.plot.add_series(label)
         self._auto_subscribe(topic)
         return label
@@ -104,7 +111,12 @@ class PlotPanel(Vertical):
         label = f"{topic}/{field_path}"
         if label in self._sources:
             return label
-        self._sources[label] = (topic, field_path, "array")
+        try:
+            steps = parse_path(field_path)
+        except ValueError:
+            log.warning("invalid field path %r — series not added", field_path)
+            return label
+        self._sources[label] = (topic, field_path, "array", steps)
         self.plot.add_snapshot_series(label)
         self._auto_subscribe(topic)
         return label
@@ -122,13 +134,15 @@ class PlotPanel(Vertical):
         if ros is None or not ros.started or not self._sources:
             return
         ts = time.monotonic()
-        for label, (topic, field_path, kind) in self._sources.items():
+        for label, (topic, _field_path, kind, steps) in self._sources.items():
             sub = ros.get_subscription(topic)
-            if sub is None or sub.last_msg is None:
+            if sub is None:
+                continue
+            msg, _msg_ts = sub.snapshot()
+            if msg is None:
                 continue
             try:
-                steps = parse_path(field_path)
-                value = get_value(sub.last_msg, steps)
+                value = get_value(msg, steps)
             except Exception:
                 continue
             if kind == "scalar":
@@ -156,7 +170,7 @@ class PlotPanel(Vertical):
             return
         st = self.query_one("#side-table", DataTable)
         st.clear()
-        for label, (_topic, _path, kind) in self._sources.items():
+        for label, (_topic, _path, kind, _steps) in self._sources.items():
             series = self.plot.series.get(label)
             cur_text = "—"
             if isinstance(series, PlotSeries):

@@ -91,6 +91,19 @@ def assign_color(index: int) -> str:
     return _PALETTE[index % len(_PALETTE)]
 
 
+def pick_color(used: set[str]) -> str:
+    """Return the first palette color not already in ``used``.
+
+    Falls back to round-robin once every palette color is taken so we
+    never block series creation — collisions after a full sweep are
+    expected and acceptable.
+    """
+    for c in _PALETTE:
+        if c not in used:
+            return c
+    return _PALETTE[len(used) % len(_PALETTE)]
+
+
 class PlotView(Static):
     """A Static widget that renders multi-series plots with plotext."""
 
@@ -117,7 +130,7 @@ class PlotView(Static):
         existing = self.series.get(label)
         if isinstance(existing, PlotSeries):
             return existing
-        c = color or assign_color(len(self.series))
+        c = color or pick_color({s.color for s in self.series.values()})
         s = PlotSeries(
             label=label,
             color=c,
@@ -130,7 +143,7 @@ class PlotView(Static):
         existing = self.series.get(label)
         if isinstance(existing, SnapshotSeries):
             return existing
-        c = color or assign_color(len(self.series))
+        c = color or pick_color({s.color for s in self.series.values()})
         s = SnapshotSeries(label=label, color=c)
         self.series[label] = s
         return s

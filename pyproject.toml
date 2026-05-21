@@ -26,7 +26,10 @@ classifiers = [
 ]
 
 dependencies = [
-    "textual>=0.79",
+    # Upper-bound Textual: ``utils/datatable.fit_last_column`` touches
+    # private attrs (_update_dimensions, _new_rows, _require_update_dimensions)
+    # that may change in 2.x. Bump deliberately after re-validating.
+    "textual>=0.79,<2.0",
     "rich>=13.7",
     "plotext>=5.2",
     "pyyaml>=6.0",

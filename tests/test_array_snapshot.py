@@ -121,6 +121,9 @@ def test_plot_panel_sample_pushes_array(monkeypatch):
         last_msg = _FakeLaserScan(ranges=[1.0, 2.0, 4.0])
         last_msg_ts = 0.0
 
+        def snapshot(self):
+            return self.last_msg, self.last_msg_ts
+
     class _Ros:
         started = True
 
