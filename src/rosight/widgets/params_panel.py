@@ -16,9 +16,11 @@ from textual.widgets import DataTable, Input, Static
 
 from rosight.utils.datatable import (
     current_row_key,
+    ellipsize,
     fit_last_column,
     fit_last_column_when_ready,
     sync_table,
+    table_width,
 )
 from rosight.utils.formatting import format_value
 from rosight.utils.fuzzy import matches
@@ -82,6 +84,7 @@ class ParamsPanel(Vertical):
         self.set_interval(3.0, self._refresh_nodes)
 
     def on_resize(self) -> None:
+        self.call_after_refresh(self._render_params)
         fit_last_column_when_ready(self.query_one("#nodes-table", DataTable))
         fit_last_column_when_ready(self.query_one("#params-table", DataTable))
 
@@ -179,11 +182,27 @@ class ParamsPanel(Vertical):
         self.query_one("#param-header", Static).update(
             Text(f"{node} ({len(params)} parameters) · s: set · y: copy YAML", style="bold cyan")
         )
+        self._render_params()
+        self.app_.push_status(f"{len(params)} parameters loaded from {node}")
+
+    def _render_params(self) -> None:
+        """Fill the params table; long values are cut to the space left so
+        the table never needs a horizontal scrollbar (``s`` shows the full
+        value)."""
         pt = self.query_one("#params-table", DataTable)
-        rows = [(p.name, (p.name, p.type_name, format_value(p.value))) for p in params]
+        params = list(self._params.values())
+        if not params:
+            return
+        width = table_width(pt)
+        name_w = max(len("Name"), *(len(p.name) for p in params)) + 2
+        type_w = max(len("Type"), *(len(p.type_name) for p in params)) + 2
+        value_w = max(12, width - name_w - type_w - 2) if width else 60
+        rows = [
+            (p.name, (p.name, p.type_name, ellipsize(format_value(p.value), value_w)))
+            for p in params
+        ]
         if sync_table(pt, rows):
             fit_last_column(pt)
-        self.app_.push_status(f"{len(params)} parameters loaded from {node}")
 
     def _selected_param(self):
         pt = self.query_one("#params-table", DataTable)

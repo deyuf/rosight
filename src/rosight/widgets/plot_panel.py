@@ -13,9 +13,17 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import DataTable, Static
 
-from rosight.utils.datatable import fit_last_column_when_ready
+from rosight.utils.datatable import (
+    ellipsize,
+    ellipsize_left,
+    fit_last_column,
+    fit_last_column_when_ready,
+    sync_table,
+    table_width,
+)
 from rosight.utils.formatting import format_value
 from rosight.utils.path import PathStep, get_value, parse_path
+from rosight.widgets._base import placeholder_row
 from rosight.widgets.plot_view import PlotSeries, PlotView, SnapshotSeries
 
 SeriesKind = Literal["scalar", "array"]
@@ -67,7 +75,7 @@ class PlotPanel(Vertical):
         with Vertical(id="plot-area"):
             yield PlotView(id="plot")
         with Vertical(id="side"):
-            yield Static("Series", id="side-header")
+            yield Static("", id="side-header")
             yield DataTable(id="side-table", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -216,8 +224,9 @@ class PlotPanel(Vertical):
     def _refresh_table(self) -> None:
         if self.region.width == 0:
             return
+        self._update_side_header()
         st = self.query_one("#side-table", DataTable)
-        st.clear()
+        values: list[tuple[str, str, str]] = []  # key, label, value
         for label, (_topic, _path, kind, _steps) in self._sources.items():
             series = self.plot.series.get(label)
             cur_text = "—"
@@ -229,10 +238,34 @@ class PlotPanel(Vertical):
             elif isinstance(series, SnapshotSeries):
                 stat = series.stats()
                 if stat:
-                    mn, mx, ln = stat
-                    cur_text = f"n={ln} [{format_value(mn)}…{format_value(mx)}]"
-            suffix = " (snap)" if kind == "array" else ""
-            st.add_row(_truncate(label + suffix, 28), cur_text, key=label)
+                    mn, mx, _ln = stat
+                    cur_text = f"{format_value(mn)}…{format_value(mx)}"
+            suffix = " [snap]" if kind == "array" else ""
+            values.append((label, label + suffix, cur_text))
+        # Fit the pane: the value column gets what it needs (capped), the
+        # series name gets the rest and is shortened from the left — the
+        # field name at the end is what tells series apart.
+        width = table_width(st)
+        value_w = min(16, max([len("Last")] + [len(v) for _, _, v in values]))
+        label_w = max(8, width - value_w - 4) if width else 40
+        rows = [
+            (key, (ellipsize_left(label, label_w), ellipsize(value, value_w)))
+            for key, label, value in values
+        ]
+        if not rows:
+            rows = [placeholder_row("no series", 2)]
+        if sync_table(st, rows):
+            fit_last_column(st)
+
+    def _update_side_header(self) -> None:
+        plot = self.plot
+        parts = [f"window {plot.window_seconds:.0f} s", f"{len(self._sources)} series"]
+        if plot.paused:
+            parts.append("PAUSED")
+        try:
+            self.query_one("#side-header", Static).update(" · ".join(parts))
+        except Exception:
+            pass
 
     # -------- key actions ----------------------------------------------
 

@@ -581,7 +581,7 @@ SCENES = [
 ]
 
 
-async def capture_all() -> list[Path]:
+async def capture_all(size: tuple[int, int] = SIZE) -> list[Path]:
     OUT.mkdir(parents=True, exist_ok=True)
     _patch_introspection()
     ros = DemoRos()
@@ -590,7 +590,7 @@ async def capture_all() -> list[Path]:
     ros.feed("/joint_states", joints, hz=100, size=312)
     ros.feed("/cmd_vel", lambda _t: Twist(), hz=20, size=48)
     app = RosightApp(ros=RosBackend())
-    async with app.run_test(headless=True, size=SIZE) as pilot:
+    async with app.run_test(headless=True, size=size) as pilot:
         app.ros = ros  # type: ignore[assignment]
         app.backend_ok = True
         app._refresh_status()
@@ -629,10 +629,15 @@ def render_pngs(svgs: list[Path]) -> None:
 
 
 def main() -> None:
+    global OUT  # noqa: PLW0603 — scenes write to the module-level output dir
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--svg-only", action="store_true", help="don't render PNGs")
+    ap.add_argument("--size", default=f"{SIZE[0]}x{SIZE[1]}", help="terminal COLSxROWS")
+    ap.add_argument("--out", type=Path, default=OUT, help="output directory")
     args = ap.parse_args()
-    svgs = asyncio.run(capture_all())
+    OUT = args.out
+    cols, rows = (int(v) for v in args.size.lower().split("x"))
+    svgs = asyncio.run(capture_all((cols, rows)))
     if not args.svg_only:
         render_pngs(svgs)
 

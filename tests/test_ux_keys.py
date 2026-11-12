@@ -160,3 +160,16 @@ async def test_number_keys_switch_tabs_while_a_table_has_focus(start, table, key
         focused = pilot.app.focused
         assert focused is not None and isinstance(focused, DataTable | Tree)
         assert target in [a.id for a in focused.ancestors if a.id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("size", [(100, 30), (200, 55)])
+async def test_confirm_dialog_is_visible_and_readable(size):
+    """Regression: the dialog used width:auto and collapsed to an empty box."""
+    async with _app().run_test(headless=True, size=size) as pilot:
+        pilot.app.push_screen(ConfirmScreen("A bag record is still running.\nQuit anyway?"))
+        await pilot.pause()
+        box = pilot.app.screen.query_one("Vertical")
+        question = pilot.app.screen.query_one("#confirm-question")
+        assert box.region.width >= 40
+        assert question.region.width >= 30 and question.region.height >= 2

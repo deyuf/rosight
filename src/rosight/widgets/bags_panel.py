@@ -18,7 +18,7 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from rosight.utils.datatable import fit_last_column_when_ready
+from rosight.utils.datatable import fit_last_column, fit_last_column_when_ready, sync_table
 
 if TYPE_CHECKING:
     from rosight.app import RosightApp
@@ -141,6 +141,7 @@ class BagsPanel(Vertical):
     BagsPanel { layout: vertical; padding: 1; }
     BagsPanel #header { background: $boost; padding: 0 1; }
     BagsPanel #procs { height: 1fr; }
+    BagsPanel Input { border-title-color: $text-muted; border-title-style: italic; }
     """
 
     bag_dir: reactive[str] = reactive(".")
@@ -172,6 +173,8 @@ class BagsPanel(Vertical):
         yield DataTable(id="procs", cursor_type="row")
 
     def on_mount(self) -> None:
+        self.query_one("#record-args", Input).border_title = "record args"
+        self.query_one("#play-path", Input).border_title = "bag to play / inspect"
         t = self.query_one("#procs", DataTable)
         t.add_columns("Process", "PID", "State", "Started")
         fit_last_column_when_ready(t)
@@ -335,8 +338,8 @@ class BagsPanel(Vertical):
         if self.region.width == 0:
             return
         t = self.query_one("#procs", DataTable)
-        t.clear()
         recording = False
+        rows = []
         for label, proc in (("record", self._record_proc), ("play", self._play_proc)):
             if proc is None:
                 continue
@@ -346,7 +349,11 @@ class BagsPanel(Vertical):
             if label == "record" and alive:
                 recording = True
             state = "running" if alive else f"exit {proc.returncode}"
-            t.add_row(label, str(proc.pid), state, "—", key=label)
+            rows.append((label, (label, str(proc.pid), state, "—")))
+        # Widths were fitted on the empty table at mount; refit whenever rows
+        # change or the table showed a horizontal scrollbar.
+        if sync_table(t, rows):
+            fit_last_column(t)
         # Auto-revert the header if the recorder exited on its own
         # (e.g. SIGTERM from outside, disk full, ros2 crash).
         self._set_recording(recording)

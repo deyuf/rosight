@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from rich.text import Text
+from textual.binding import Binding
 from textual.message import Message
 from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
@@ -42,10 +43,12 @@ class MessageTree(Tree[FieldEntry]):
         ("p", "select_field", "Plot field"),
         ("enter", "activate", "Expand / plot"),
         ("slash", "search", "Search"),
-        ("n", "search_next", "Next match"),
-        ("N", "search_prev", "Prev match"),
+        # Secondary keys stay out of the footer (it overflows narrow
+        # terminals); they are listed in the ? help.
+        Binding("n", "search_next", "Next match", show=False),
+        Binding("N", "search_prev", "Prev match", show=False),
         ("y", "yank_path", "Copy path"),
-        ("Y", "yank_value", "Copy value"),
+        Binding("Y", "yank_value", "Copy value", show=False),
     ]
 
     # How long a changed value stays highlighted.

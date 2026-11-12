@@ -204,6 +204,13 @@ class PlotView(Static):
         size = self.size
         width = max(20, size.width - 2)
         height = max(8, size.height - 2)
+        if self.show_legend and self.series:
+            # Leave room for the legend below the chart; it used to be cut
+            # to one line on small terminals. ~28 cells per entry covers the
+            # "● label (snap) = len=… min=… max=…" text.
+            legend_cells = sum(len(s.label) + 28 for s in self.series.values())
+            legend_rows = -(-legend_cells // max(1, size.width))
+            height = max(8, height - legend_rows)
 
         if not self.series:
             return Text(

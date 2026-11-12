@@ -19,11 +19,16 @@ class ConfirmScreen(ModalScreen[bool]):
 
     DEFAULT_CSS = """
     ConfirmScreen { align: center middle; }
+    /* Explicit width: with width:auto the text widgets (which size to
+       their container) collapsed the dialog to an empty box. */
     ConfirmScreen > Vertical {
-        width: auto; max-width: 70; height: auto;
+        width: 64; max-width: 90%; height: auto;
         background: $panel; border: round $warning; padding: 1 2;
     }
-    ConfirmScreen #confirm-keys { color: $text-muted; margin-top: 1; }
+    ConfirmScreen #confirm-question { width: 100%; text-align: center; }
+    ConfirmScreen #confirm-keys {
+        width: 100%; text-align: center; color: $text-muted; margin-top: 1;
+    }
     """
 
     def __init__(self, question: str) -> None:
@@ -33,7 +38,7 @@ class ConfirmScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Static(self.question, id="confirm-question")
-            yield Static("[y]es / [n]o", id="confirm-keys", markup=False)
+            yield Static("y / enter: yes    n / esc: no", id="confirm-keys", markup=False)
 
     def action_answer(self, yes: bool) -> None:
         self.dismiss(yes)

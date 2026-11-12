@@ -14,7 +14,14 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from rosight.utils.datatable import fit_last_column, fit_last_column_when_ready, sync_table
+from rosight.utils.datatable import (
+    _cell_width,
+    fit_last_column,
+    fit_last_column_when_ready,
+    set_columns,
+    sync_table,
+    table_width,
+)
 from rosight.utils.formatting import format_bytes, format_rate, short_type, sparkline
 from rosight.utils.fuzzy import matches
 from rosight.widgets._base import (
@@ -30,6 +37,9 @@ _TREND_LEN = 8
 # Trend last: the last column is stretched to the pane width, so nothing
 # useful (BW) gets pushed off-screen on narrow terminals.
 _COLUMNS = ("Topic", "Type", "Pub", "Sub", "Hz", "BW/s", "Trend")
+# When the pane is too narrow for every column, drop them in this order —
+# the topic name and its rate always stay.
+_DROP_ORDER = ("Trend", "Type", "Sub", "Pub", "BW/s")
 
 if TYPE_CHECKING:
     from rosight.app import RosightApp
@@ -116,12 +126,15 @@ class TopicsPanel(Vertical):
         table = self.query_one("#topics-table", DataTable)
         table.add_columns(*_COLUMNS)
         fit_last_column_when_ready(table)
+        self._columns: tuple[str, ...] = _COLUMNS
         self._render_table()
         self._refresh_table()
         self.set_interval(1.0, self._refresh_table)
         self.set_interval(0.25, self._refresh_detail)
 
     def on_resize(self) -> None:
+        # Column set depends on the width: re-pick after the new layout.
+        self.call_after_refresh(self._render_table)
         fit_last_column_when_ready(self.query_one("#topics-table", DataTable))
 
     # ---------------- filter ----------------
@@ -183,7 +196,7 @@ class TopicsPanel(Vertical):
             hist = self._hz_hist.setdefault(topic, deque(maxlen=_TREND_LEN))
             hist.append(sub.rate.sample().hz)
 
-    def _row_cells(self, ti: TopicInfo, sub: Subscription | None) -> tuple:
+    def _row_cells(self, ti: TopicInfo, sub: Subscription | None) -> dict:
         hz_cell: Text | str = "—"
         bw_str = "—"
         trend = ""
@@ -203,29 +216,47 @@ class TopicsPanel(Vertical):
             name.append(ti.name, style="bold")
         else:
             name.append("  " + ti.name)
-        return (
-            name,
-            Text(short_type(ti.primary_type), style="dim"),
-            str(ti.publisher_count),
-            str(ti.subscriber_count),
-            hz_cell,
-            bw_str,
-            Text(trend, style="green"),
-        )
+        return {
+            "Topic": name,
+            "Type": Text(short_type(ti.primary_type), style="dim"),
+            "Pub": str(ti.publisher_count),
+            "Sub": str(ti.subscriber_count),
+            "Hz": hz_cell,
+            "BW/s": bw_str,
+            "Trend": Text(trend, style="green"),
+        }
+
+    @staticmethod
+    def _pick_columns(cells: list[dict], width: int) -> tuple[str, ...]:
+        """Widest column set that fits ``width`` cells (all when unknown)."""
+        if width <= 0 or not cells:
+            return _COLUMNS
+        need = {c: max([len(c)] + [_cell_width(row[c]) for row in cells]) + 2 for c in _COLUMNS}
+        need["Trend"] = max(need["Trend"], _TREND_LEN + 2)
+        cols = list(_COLUMNS)
+        for victim in _DROP_ORDER:
+            if sum(need[c] for c in cols) <= width:
+                break
+            cols.remove(victim)
+        return tuple(cols)
 
     def _render_table(self) -> None:
         table = self.query_one("#topics-table", DataTable)
         # One lock-protected call for every active sub, then a dict lookup
         # per row instead of N lock acquisitions.
         subs = self._subs_by_topic()
-        rows = [
+        cells = [
             (ti.name, self._row_cells(ti, subs.get(ti.name)))
             for ti in self._topic_cache
             if matches(self.filter_text, ti.name, ti.primary_type)
         ]
+        columns = self._pick_columns([c for _, c in cells], table_width(table))
+        if set_columns(table, columns):
+            self._columns = columns
+        rows = [(key, tuple(c[col] for col in self._columns)) for key, c in cells]
         if not rows:
             text = empty_state_text(self.ros, self._graph_gen, self.filter_text, "topics")
-            rows = [placeholder_row(text, len(_COLUMNS))]
+            rows = [placeholder_row(text, len(self._columns))]
         # Incremental: on a normal tick only the Hz/Trend/BW cells change,
         # so cursor and scroll stay put and nothing flickers.
         if sync_table(table, rows):
@@ -513,12 +544,18 @@ class TopicsPanel(Vertical):
             return
         rs = sub.rate.sample()
         bs = sub.bandwidth.sample()
+        # Formatters pad to a fixed width for tables; strip that here so the
+        # label/value spacing in the header is even.
         text = Text.assemble(
             (f"{topic}\n", "bold cyan"),
-            (f"type: {short_type(sub.type_name)}   ", "dim"),
-            (f"hz: {format_rate(rs.hz)}   ", "yellow"),
-            (f"bw: {format_bytes(bs.bytes_per_sec)}/s   ", "magenta"),
-            (f"jitter: {rs.jitter_ms:.1f}ms", "green"),
+            ("type ", "dim"),
+            (f"{short_type(sub.type_name)}   ", ""),
+            ("hz ", "dim"),
+            (f"{format_rate(rs.hz).strip()}   ", "yellow"),
+            ("bw ", "dim"),
+            (f"{format_bytes(bs.bytes_per_sec).strip()}/s   ", "magenta"),
+            ("jitter ", "dim"),
+            (f"{rs.jitter_ms:.1f} ms", "green"),
         )
         if sub.qos_incompatible:
             text.append(

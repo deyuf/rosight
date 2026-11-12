@@ -87,6 +87,14 @@ class NodesPanel(GraphListPanel):
         header.update(
             Text.assemble((f"{node}\n", "bold cyan"), ("enter on an entry: jump to it", "dim"))
         )
+        # Drop the [Type] suffix when names alone nearly fill the pane, so the
+        # tree doesn't need a horizontal scrollbar.
+        width = tree.size.width
+        longest = max(
+            (len(n) + len(short_type(t[0])) + 3 for items in info.values() for n, t in items if t),
+            default=0,
+        )
+        show_types = not width or longest + 6 <= width
         for key, items in info.items():
             title, kind = self._SECTIONS.get(key, (key, ""))
             section = tree.root.add(
@@ -95,7 +103,7 @@ class NodesPanel(GraphListPanel):
             )
             for name, types in items:
                 label = Text(name)
-                if types:
+                if types and show_types:
                     label.append(f"  [{short_type(types[0])}]", style="dim")
                 section.add_leaf(label, data=(kind, name))
 

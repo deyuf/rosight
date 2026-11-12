@@ -101,10 +101,13 @@ class CommandPalette(ModalScreen[str | None]):
     }
     """
 
+    # One group per line, each short enough not to wrap mid-command at
+    # 100 columns.
     HINT = (
-        ":topic <filter>  :plot <topic> <field>  :plot-array <topic> <field>  :view <topic>\n"
-        ":unsub <topic|all>  :domain <N>  :reconnect  :record  :help  :quit\n"
-        "→ accept completion · ↑/↓ history"
+        ":topic <filter>   :node <name>   :param <node>   :view <topic>\n"
+        ":plot <topic> <field>   :plot-array <topic> <field>\n"
+        ":unsub <topic|all>   :domain <N>   :reconnect   :record   :quit\n"
+        "→ accept completion · ↑/↓ history · esc close"
     )
 
     def __init__(

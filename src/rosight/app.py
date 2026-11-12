@@ -218,7 +218,8 @@ class RosightApp(App[int]):
         what = " and ".join(running)
         question = (
             f"A bag {what} is still running.\n"
-            "Quit anyway? It will be stopped (the bag is finalized first)."
+            "Quitting stops it (the bag is finalized first).\n\n"
+            "Quit anyway?"
         )
 
         def _done(yes: bool | None) -> None:

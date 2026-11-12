@@ -175,6 +175,13 @@ def sync_table(table: Any, rows: list[tuple[str, tuple[Any, ...]]]) -> bool:
     selected = current_row_key(table)
     scroll = getattr(table, "scroll_offset", None)
     table.clear()
+    # clear() keeps each column's measured content width, so a column that
+    # once held a long value (e.g. an empty-state placeholder) would never
+    # shrink back. Re-measure from the new rows only.
+    for column in table.columns.values():
+        if getattr(column, "auto_width", True):
+            label = getattr(column, "label", "")
+            column.content_width = getattr(label, "cell_len", len(str(label)))
     cache = {}
     new_idx = -1
     for idx, (key, cells) in enumerate(rows):
@@ -195,3 +202,37 @@ def sync_table(table: Any, rows: list[tuple[str, tuple[Any, ...]]]) -> bool:
 def _cell_width(value: Any) -> int:
     plain = getattr(value, "plain", None)
     return len(plain if isinstance(plain, str) else str(value))
+
+
+def ellipsize(text: str, width: int) -> str:
+    """Cut ``text`` to ``width`` cells, ending in "…" when shortened."""
+    if width <= 0:
+        return ""
+    return text if len(text) <= width else text[: max(0, width - 1)] + "…"
+
+
+def ellipsize_left(text: str, width: int) -> str:
+    """Like :func:`ellipsize` but keeps the end (useful for paths)."""
+    if width <= 0:
+        return ""
+    return text if len(text) <= width else "…" + text[-(width - 1) :]
+
+
+def table_width(table: Any) -> int:
+    """Usable content width of a DataTable (0 when not laid out yet)."""
+    try:
+        return int(table.scrollable_content_region.width or table.size.width)
+    except Exception:
+        return 0
+
+
+def set_columns(table: Any, columns: tuple[str, ...]) -> bool:
+    """Replace the table's columns if they differ; True when changed."""
+    current = tuple(str(c.label) for c in table.columns.values())
+    if current == columns:
+        return False
+    table.clear(columns=True)
+    table.add_columns(*columns)
+    table._rosight_cells = None
+    table._rosight_fit_cache = None
+    return True

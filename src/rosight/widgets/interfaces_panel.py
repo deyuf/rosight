@@ -57,7 +57,8 @@ class InterfacesPanel(Vertical):
 
     def on_mount(self) -> None:
         t = self.query_one("#iface-table", DataTable)
-        t.add_columns("Type", "Kind")
+        # The kind (msg/srv/action) is already part of the path.
+        t.add_columns("Interface")
         fit_last_column_when_ready(t)
         self._discover()
         self._render_table()
@@ -118,10 +119,10 @@ class InterfacesPanel(Vertical):
         t.clear()
         ft = self.filter_text.lower().strip()
         new_idx = -1
-        for idx, (name, kind) in enumerate(
+        for idx, (name, _kind) in enumerate(
             (n, k) for n, k in self._cache if not ft or ft in n.lower()
         ):
-            t.add_row(name, kind, key=name)
+            t.add_row(name, key=name)
             if name == selected_key:
                 new_idx = idx
         restore_cursor(t, selected_key, new_idx)
@@ -170,8 +171,12 @@ class InterfacesPanel(Vertical):
             text = Text()
             fields = getattr(cls, "get_fields_and_field_types", None)
             if callable(fields):
-                for fname, ftype in fields().items():
-                    text.append(f"{ftype:30s} ", style="yellow")
+                items = list(fields().items())
+                # Align field names on the longest type of this message (a
+                # fixed 30 broke on types like TwistWithCovariance).
+                type_w = max((len(t) for _, t in items), default=0) + 2
+                for fname, ftype in items:
+                    text.append(ftype.ljust(type_w), style="yellow")
                     text.append(f"{fname}\n", style="white")
             else:
                 text.append(repr(cls))

@@ -158,7 +158,6 @@ class HelpScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with VerticalScroll():
-            yield Static("Help", id="help-title")
             yield Markdown(HELP_TEXT)
             with Center():
                 yield Static("[esc] to close", classes="dim")
