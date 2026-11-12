@@ -65,7 +65,7 @@ class ParamsPanel(Vertical):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="left"):
-            yield Input(placeholder="filter nodes…", id="filter")
+            yield Input(placeholder="filter nodes… (fuzzy)", id="filter")
             yield DataTable(id="nodes-table", cursor_type="row", zebra_stripes=True)
         with Vertical(id="right"):
             yield Static("Select a node and press [enter]", id="param-header")

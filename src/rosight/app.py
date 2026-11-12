@@ -333,9 +333,30 @@ class RosightApp(App[int]):
 
     def action_tab(self, tab_id: str) -> None:
         try:
-            self.query_one(TabbedContent).active = tab_id
+            tabs = self.query_one(TabbedContent)
         except Exception:
-            pass
+            return
+        if tabs.active != tab_id:
+            # A widget that keeps focus inside the pane being hidden makes
+            # Textual move focus to a sibling in that same pane, and
+            # TabbedContent then re-activates it — pressing 1-9 with a table
+            # focused bounced straight back. Drop focus first.
+            self.screen.set_focus(None)
+        tabs.active = tab_id
+        self.call_after_refresh(self._focus_pane, tab_id)
+
+    def _focus_pane(self, tab_id: str) -> None:
+        """Focus the main table/tree of the visible pane so keys work at once."""
+        if self.focused is not None:
+            return  # something (e.g. a goto) already chose a target
+        try:
+            pane = self.query_one(f"TabPane#{tab_id}")
+        except Exception:
+            return
+        for widget in pane.query("DataTable, Tree"):
+            if widget.focusable and widget.display:
+                widget.focus()
+                return
 
     # --------------- helpers exposed to panels ---------------
 

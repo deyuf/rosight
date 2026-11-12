@@ -66,8 +66,8 @@ class ServicesPanel(GraphListPanel):
         s = next((x for x in self.items if x.name == self.selected), None)
         if s is None:
             return
+        self.query_one("#srv-header", Static).update(Text(s.name, style="bold cyan"))
         text = Text()
-        text.append(f"{s.name}\n", style="bold cyan")
         text.append(f"types: {', '.join(s.types)}\n", style="dim")
         text.append("\nPress [c] to call. Auto-form coming soon.", style="italic")
         self.query_one("#srv-detail", Static).update(text)
@@ -132,8 +132,8 @@ class ServicesPanel(GraphListPanel):
             detail.update(Text(f"✗ call failed: {e}", style="bold red"))
             self.app_.notify(f"{name}: {e}", title="Call", severity="error")
             return
+        self.query_one("#srv-header", Static).update(Text(name, style="bold cyan"))
         text = Text()
-        text.append(f"{name}\n", style="bold cyan")
         text.append("response:\n", style="bold green")
         text.append(message_to_yaml(resp))
         detail.update(text)

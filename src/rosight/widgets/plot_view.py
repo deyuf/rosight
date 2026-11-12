@@ -220,6 +220,13 @@ class PlotView(Static):
             s for s in self.series.values() if isinstance(s, SnapshotSeries) and s.visible
         ]
 
+        # plotext's clf() only clears the *active* figure. After the previous
+        # frame's plt.subplot(2, 1) that is the bottom subplot, so the new
+        # subplots(2, 1) nested inside it and the snapshot series was drawn
+        # twice. Reset to the main figure first.
+        main = getattr(plt, "main", None)
+        if callable(main):
+            main()
         plt.clf()
         plt.theme("clear")
 

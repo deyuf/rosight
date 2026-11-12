@@ -69,8 +69,8 @@ class ActionsPanel(GraphListPanel):
         a = next((x for x in self.items if x.name == self.selected), None)
         if a is None:
             return
+        self.query_one("#act-header", Static).update(Text(a.name, style="bold cyan"))
         text = Text()
-        text.append(f"{a.name}\n", style="bold cyan")
         text.append(f"types: {', '.join(a.types)}\n", style="dim")
         if self._running_goal == a.name:
             text.append("\ngoal running — x to cancel", style="yellow")
@@ -143,9 +143,10 @@ class ActionsPanel(GraphListPanel):
         detail = self.query_one("#act-detail", Static)
         state: dict[str, object] = {"phase": "sending goal…", "feedback": None}
 
+        self.query_one("#act-header", Static).update(Text(name, style="bold cyan"))
+
         def render() -> None:
             text = Text()
-            text.append(f"{name}\n", style="bold cyan")
             text.append(f"{state['phase']}  (x: cancel)\n", style="yellow")
             if state["feedback"] is not None:
                 text.append("\nfeedback:\n", style="bold")
@@ -177,7 +178,7 @@ class ActionsPanel(GraphListPanel):
                 cancel=self._cancel,
             )
         except Exception as e:
-            detail.update(Text(f"{name}\n✗ goal failed: {e}", style="bold red"))
+            detail.update(Text(f"✗ goal failed: {e}", style="bold red"))
             self.app_.notify(f"{name}: {e}", title="Action", severity="error")
             return
         finally:
@@ -185,7 +186,6 @@ class ActionsPanel(GraphListPanel):
             self._cancel = None
         label = GOAL_STATUS.get(status, str(status))
         text = Text()
-        text.append(f"{name}\n", style="bold cyan")
         text.append(f"{label}\n", style="bold green" if status == 4 else "bold red")
         text.append("\nresult:\n", style="bold")
         text.append(message_to_yaml(result))

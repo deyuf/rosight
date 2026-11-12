@@ -26,8 +26,10 @@ from rosight.widgets._base import (
 from rosight.widgets.message_tree import MessageTree
 
 # Seconds of Hz history shown in the Trend column (one sample per refresh).
-_TREND_LEN = 12
-_COLUMNS = ("Topic", "Type", "Pub", "Sub", "Hz", "Trend", "BW")
+_TREND_LEN = 8
+# Trend last: the last column is stretched to the pane width, so nothing
+# useful (BW) gets pushed off-screen on narrow terminals.
+_COLUMNS = ("Topic", "Type", "Pub", "Sub", "Hz", "BW/s", "Trend")
 
 if TYPE_CHECKING:
     from rosight.app import RosightApp
@@ -55,7 +57,7 @@ class TopicsPanel(Vertical):
     DEFAULT_CSS = """
     TopicsPanel { layout: horizontal; overflow: hidden; }
     TopicsPanel > #left {
-        width: 45%; min-width: 40;
+        width: 50%; min-width: 40;
         border-right: solid $primary 30%;
         overflow: hidden;
     }
@@ -190,8 +192,10 @@ class TopicsPanel(Vertical):
             if sub.qos_incompatible and hz == 0:
                 hz_cell = Text("QoS!", style="bold red")
             else:
-                hz_cell = format_rate(hz)
-            bw_str = format_bytes(sub.bandwidth.sample().bytes_per_sec) + "/s"
+                # Units live in the column header; keep cells narrow so the
+                # table fits half a terminal without horizontal scrolling.
+                hz_cell = format_rate(hz).strip().removesuffix(" Hz")
+            bw_str = format_bytes(sub.bandwidth.sample().bytes_per_sec).strip()
             trend = sparkline(tuple(self._hz_hist.get(ti.name, ())))
         name = Text()
         if sub is not None:
@@ -205,8 +209,8 @@ class TopicsPanel(Vertical):
             str(ti.publisher_count),
             str(ti.subscriber_count),
             hz_cell,
-            Text(trend, style="green"),
             bw_str,
+            Text(trend, style="green"),
         )
 
     def _render_table(self) -> None:

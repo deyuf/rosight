@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("textual")
 
-from textual.widgets import DataTable, Input, TabbedContent
+from textual.widgets import DataTable, Input, TabbedContent, Tree
 
 from rosight.app import RosightApp
 from rosight.ros.backend import RosBackend, ServiceInfo
@@ -133,3 +133,30 @@ async def test_vim_keys_type_into_filter_input():
         await pilot.pause()
         await pilot.press("j", "k", "g")
         assert flt.value == "jkg"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("start", "table", "key", "target"),
+    [
+        ("services", "#srv-table", "6", "plot"),
+        ("actions", "#act-table", "2", "nodes"),
+        ("topics", "#topics-table", "8", "bags"),
+    ],
+)
+async def test_number_keys_switch_tabs_while_a_table_has_focus(start, table, key, target):
+    """Regression: the focused table's pane was re-activated, so 1-9 did
+    nothing once you had used a table."""
+    async with _app().run_test(headless=True, size=(140, 40)) as pilot:
+        pilot.app.query_one(TabbedContent).active = start
+        for _ in range(3):
+            await pilot.pause()
+        pilot.app.query_one(table).focus()
+        await pilot.pause()
+        await pilot.press(key)
+        for _ in range(3):
+            await pilot.pause()
+        assert pilot.app.query_one(TabbedContent).active == target
+        focused = pilot.app.focused
+        assert focused is not None and isinstance(focused, DataTable | Tree)
+        assert target in [a.id for a in focused.ancestors if a.id]

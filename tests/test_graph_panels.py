@@ -168,7 +168,7 @@ async def test_topics_table_trend_and_qos_cells():
         table = pilot.app.query_one("#topics-table", DataTable)
         row = _cells(table)[0]
         assert row[0] == "● /scan", "subscribed rows carry a marker"
-        assert row[5] == "▁▁▁", "three zero-Hz samples → flat trend"
+        assert row[6] == "▁▁▁", "three zero-Hz samples → flat trend"
 
         sub.on_incompatible_qos(SimpleNamespace(total_count=2, last_policy_kind="RELIABILITY"))
         panel._refresh_table()

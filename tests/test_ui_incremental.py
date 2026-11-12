@@ -39,7 +39,9 @@ def test_fuzzy_matches(query, fields, expected):
 def test_sparkline_shapes():
     assert sparkline([]) == ""
     assert sparkline([0, 0, 0]) == "▁▁▁"
-    assert sparkline([10, 10]) == "██"
+    assert sparkline([10, 10]) == "▅▅", "steady rate → flat mid line, not a bar"
+    assert sparkline([50.0, 49.9, 50.1]) == "▅▅▅"
+    assert sparkline([10, 10, 3, 10])[2] == "▁", "a drop is visible"
     line = sparkline([0, 5, 10])
     assert line[0] == "▁" and line[-1] == "█" and len(line) == 3
     assert len(sparkline(list(range(50)), width=12)) == 12

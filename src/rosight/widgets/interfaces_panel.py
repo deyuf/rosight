@@ -168,7 +168,6 @@ class InterfacesPanel(Vertical):
             else:
                 cls = get_action_class(name)
             text = Text()
-            text.append(f"{name}\n\n", style="bold cyan")
             fields = getattr(cls, "get_fields_and_field_types", None)
             if callable(fields):
                 for fname, ftype in fields().items():

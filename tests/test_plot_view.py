@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from rosight.widgets.plot_view import PlotSeries, SnapshotSeries, assign_color
 
 
@@ -47,3 +49,33 @@ def test_snapshot_series_set_latest_overwrites():
     s.set_latest([1, 2, 3])
     s.set_latest([10])
     assert s.values == [10.0]
+
+
+@pytest.mark.asyncio
+async def test_mixed_plot_does_not_duplicate_subplots_across_frames():
+    """Regression: with time + snapshot series, every frame after the first
+    drew the snapshot subplot twice (plotext's clf() cleared only the
+    active subplot, so the next subplots(2, 1) nested inside it)."""
+    pytest.importorskip("plotext")
+    from textual.app import App, ComposeResult
+
+    from rosight.widgets.plot_view import PlotView
+
+    class _App(App):
+        def compose(self) -> ComposeResult:
+            yield PlotView(id="pv")
+
+    async with _App().run_test(size=(120, 40)) as pilot:
+        pv = pilot.app.query_one(PlotView)
+        pv.add_series("speed")
+        for i in range(20):
+            pv.push("speed", float(i), None)
+        pv.add_snapshot_series("ranges")
+        pv.push_snapshot("ranges", [1.0, 2.0, 3.0, 2.0])
+        await pilot.pause()
+        for _ in range(3):
+            plain = pv._build_content().plain
+            # One time subplot ("seconds" axis) and one snapshot subplot
+            # ("index" axis) — never more, however many frames rendered.
+            assert plain.count("seconds") == 1, plain
+            assert plain.count("index") == 1, plain
