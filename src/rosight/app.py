@@ -17,13 +17,14 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.css.query import NoMatches
 from textual.reactive import reactive
-from textual.widgets import Footer, Header, TabbedContent, TabPane
+from textual.widgets import DataTable, Footer, Header, TabbedContent, TabPane, Tree
 
 from rosight.config import Config, load_user_state, save_user_state
 from rosight.ros.backend import RosBackend, RosUnavailable
 from rosight.widgets.actions_panel import ActionsPanel
 from rosight.widgets.bags_panel import BagsPanel
 from rosight.widgets.command_palette import CommandPalette
+from rosight.widgets.confirm_screen import ConfirmScreen
 from rosight.widgets.help_screen import HelpScreen
 from rosight.widgets.interfaces_panel import InterfacesPanel
 from rosight.widgets.nodes_panel import NodesPanel
@@ -58,6 +59,11 @@ class RosightApp(App[int]):
         Binding("7", "tab('tf')", "TF", show=False),
         Binding("8", "tab('bags')", "Bags", show=False),
         Binding("9", "tab('interfaces')", "Interfaces", show=False),
+        # vim-style motions; active only when ui.vim_keys (see check_action).
+        Binding("j", "vim('down')", "Down", show=False),
+        Binding("k", "vim('up')", "Up", show=False),
+        Binding("g", "vim('top')", "Top", show=False),
+        Binding("G", "vim('bottom')", "Bottom", show=False),
     ]
 
     backend_ok: reactive[bool] = reactive(False)
@@ -166,6 +172,46 @@ class RosightApp(App[int]):
                 log.exception("ros stop failed")
 
     # --------------- actions ---------------
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        # With vim_keys off, report the motion bindings as unavailable so the
+        # key falls through to whatever else handles it.
+        return action != "vim" or self.config.ui.vim_keys
+
+    def action_vim(self, motion: str) -> None:
+        """Map j/k/g/G onto the focused table or tree."""
+        w = self.focused
+        if w is None:
+            return
+        if motion == "down" and hasattr(w, "action_cursor_down"):
+            w.action_cursor_down()
+        elif motion == "up" and hasattr(w, "action_cursor_up"):
+            w.action_cursor_up()
+        elif isinstance(w, DataTable) and w.row_count:
+            w.move_cursor(row=0 if motion == "top" else w.row_count - 1, animate=False)
+        elif isinstance(w, Tree):
+            w.cursor_line = 0 if motion == "top" else w.last_line
+
+    async def action_quit(self) -> None:
+        """Quit, but confirm first while a bag is recording or playing."""
+        try:
+            running = self.query_one(BagsPanel).running_processes()
+        except Exception:
+            running = []
+        if not running:
+            self.exit(0)
+            return
+        what = " and ".join(running)
+        question = (
+            f"A bag {what} is still running.\n"
+            "Quit anyway? It will be stopped (the bag is finalized first)."
+        )
+
+        def _done(yes: bool | None) -> None:
+            if yes:
+                self.exit(0)
+
+        self.push_screen(ConfirmScreen(question), _done)
 
     def action_help(self) -> None:
         self.push_screen(HelpScreen())
@@ -345,7 +391,7 @@ class RosightApp(App[int]):
     # ----- individual command handlers -----
 
     def _cmd_quit(self, _args: list[str]) -> bool:
-        self.exit(0)
+        self.run_worker(self.action_quit(), group="rosight-quit")
         return True
 
     def _cmd_topic(self, args: list[str]) -> bool:

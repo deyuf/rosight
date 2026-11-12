@@ -180,6 +180,14 @@ class BagsPanel(Vertical):
     def on_resize(self) -> None:
         fit_last_column_when_ready(self.query_one("#procs", DataTable))
 
+    def running_processes(self) -> list[str]:
+        """Labels of children still running ("record", "play")."""
+        return [
+            label
+            for label, proc in (("record", self._record_proc), ("play", self._play_proc))
+            if _is_running(proc)
+        ]
+
     def on_unmount(self) -> None:
         # The app is closing (or the panel is being removed): make sure no
         # recorder/player outlives us. Blocking here is fine — it's bounded
