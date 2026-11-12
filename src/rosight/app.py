@@ -96,7 +96,8 @@ class RosightApp(App[int]):
     # --------------- compose / lifecycle ---------------
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        # ◎ echoes the logo: a reticle locked onto a graph node.
+        yield Header(show_clock=True, icon="◎")
         with TabbedContent(initial="topics", id="main-tabs"):
             with TabPane("Messages", id="topics"):
                 yield TopicsPanel()
