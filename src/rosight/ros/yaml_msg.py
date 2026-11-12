@@ -75,12 +75,20 @@ def yaml_to_message(text: str, msg_cls: Any) -> Any:
     if not isinstance(data, dict):
         raise MessageYamlError("expected a mapping of field: value at the top level")
     msg = msg_cls()
-    try:
-        from rosidl_runtime_py.set_message import set_message_fields  # type: ignore
-    except Exception:
-        set_message_fields = None
+    set_message_fields = None
+    # rosidl's setter knows every ROS field type (incl. arrays of nested
+    # messages) but only works on generated classes (SLOT_TYPES); anything
+    # else goes through the pure-Python setter.
+    if hasattr(type(msg), "SLOT_TYPES"):
+        try:
+            from rosidl_runtime_py.set_message import set_message_fields  # type: ignore
+        except Exception:
+            set_message_fields = None
     try:
         if set_message_fields is not None:
+            # Name errors first, with the full field path — rosidl's own
+            # messages ("'Vector3' object has no attribute 'w'") are vaguer.
+            _check_keys(msg, data, "")
             set_message_fields(msg, data)
         else:
             _set_fields(msg, data, "")
@@ -89,6 +97,25 @@ def yaml_to_message(text: str, msg_cls: Any) -> Any:
     except Exception as e:
         raise MessageYamlError(str(e)) from e
     return msg
+
+
+def _check_keys(obj: Any, data: dict[str, Any], prefix: str) -> None:
+    fields_fn = getattr(obj, "get_fields_and_field_types", None)
+    known = fields_fn() if callable(fields_fn) else {}
+    for key, value in data.items():
+        path = f"{prefix}{key}"
+        if key not in known:
+            raise MessageYamlError(f"unknown field {path!r}")
+        current = getattr(obj, key, None)
+        is_msg = callable(getattr(current, "get_fields_and_field_types", None))
+        if isinstance(value, dict):
+            if not is_msg:
+                raise MessageYamlError(f"{path!r} is not a nested message")
+            _check_keys(current, value, f"{path}.")
+        elif is_msg:
+            raise MessageYamlError(
+                f"{path!r} is a nested message; expected a mapping, got {value!r}"
+            )
 
 
 def _set_fields(obj: Any, data: dict[str, Any], prefix: str) -> None:

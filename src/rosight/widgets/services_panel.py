@@ -69,7 +69,7 @@ class ServicesPanel(GraphListPanel):
         self.query_one("#srv-header", Static).update(Text(s.name, style="bold cyan"))
         text = Text()
         text.append(f"types: {', '.join(s.types)}\n", style="dim")
-        text.append("\nPress [c] to call. Auto-form coming soon.", style="italic")
+        text.append("\nc: call this service", style="italic dim")
         self.query_one("#srv-detail", Static).update(text)
 
     def action_call(self) -> None:
