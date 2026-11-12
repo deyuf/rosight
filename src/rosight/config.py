@@ -7,6 +7,7 @@ defaults are applied automatically.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from dataclasses import dataclass, field, replace
@@ -134,6 +135,46 @@ def load_user_state() -> dict[str, Any]:
         return {}
 
 
+def _toml_scalar(v: Any) -> str | None:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return repr(v)
+    if isinstance(v, str):
+        # JSON string escapes are valid TOML basic-string escapes.
+        return json.dumps(v, ensure_ascii=False)
+    if isinstance(v, (list, tuple)):
+        items = [_toml_scalar(x) for x in v]
+        if any(
+            i is None or isinstance(x, (list, tuple, dict)) for i, x in zip(items, v, strict=True)
+        ):
+            return None
+        return "[" + ", ".join(items) + "]"  # type: ignore[arg-type]
+    return None
+
+
+def dump_state_toml(state: dict[str, Any]) -> str:
+    """Serialize the user-state dict: scalars, lists of scalars, and one
+    level of tables. Anything else is skipped (state is best-effort)."""
+    lines: list[str] = []
+    tables: list[tuple[str, dict[str, Any]]] = []
+    for k, v in state.items():
+        if isinstance(v, dict):
+            tables.append((k, v))
+            continue
+        value = _toml_scalar(v)
+        if value is not None:
+            lines.append(f"{json.dumps(str(k))} = {value}")
+    for name, table in tables:
+        lines.append("")
+        lines.append(f"[{json.dumps(str(name))}]")
+        for k, v in table.items():
+            value = _toml_scalar(v)
+            if value is not None:
+                lines.append(f"{json.dumps(str(k))} = {value}")
+    return "\n".join(lines) + "\n"
+
+
 def save_user_state(state: dict[str, Any]) -> None:
     """Atomically replace the state file with ``state``.
 
@@ -144,15 +185,7 @@ def save_user_state(state: dict[str, Any]) -> None:
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_suffix(p.suffix + ".tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            for k, v in state.items():
-                if isinstance(v, str):
-                    escaped = v.replace("\\", "\\\\").replace('"', '\\"')
-                    f.write(f'{k} = "{escaped}"\n')
-                elif isinstance(v, bool):
-                    f.write(f"{k} = {'true' if v else 'false'}\n")
-                elif isinstance(v, (int, float)):
-                    f.write(f"{k} = {v}\n")
+        tmp.write_text(dump_state_toml(state), encoding="utf-8")
         tmp.replace(p)
     except Exception:
         pass

@@ -60,6 +60,8 @@ class PlotPanel(Vertical):
         # ``parsed_steps`` is the pre-parsed result of ``parse_path`` —
         # caching it shaves a regex pass per series per sample tick.
         self._sources: dict[str, tuple[str, str, SeriesKind, list[PathStep]]] = {}
+        self._last_attempt: dict[str, float] = {}
+        self._user_paused: set[str] = set()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="plot-area"):
@@ -121,6 +123,32 @@ class PlotPanel(Vertical):
         self._auto_subscribe(topic)
         return label
 
+    # Retry subscribing a plotted topic at most this often (it may not be
+    # discovered yet at startup, or a reconnect/domain switch dropped it).
+    RESUBSCRIBE_PERIOD = 2.0
+
+    def sources_spec(self) -> list[str]:
+        """Series as ``kind|topic|field`` strings (for the state file)."""
+        return [f"{kind}|{topic}|{path}" for topic, path, kind, _ in self._sources.values()]
+
+    def restore_sources(self, specs: list[str]) -> int:
+        added = 0
+        for spec in specs:
+            kind, _, rest = str(spec).partition("|")
+            topic, _, path = rest.partition("|")
+            if not topic or not path:
+                continue
+            if kind == "array":
+                self.add_snapshot_series(topic, path)
+            else:
+                self.add_series(topic, path)
+            added += 1
+        return added
+
+    def mark_unsubscribed(self, topic: str) -> None:
+        """The user unsubscribed on purpose: stop auto-resubscribing it."""
+        self._user_paused.add(topic)
+
     def series_using(self, topic: str) -> int:
         return sum(1 for src in self._sources.values() if src[0] == topic)
 
@@ -129,12 +157,20 @@ class PlotPanel(Vertical):
         return export(filename) if callable(export) else Path.cwd() / filename
 
     def _auto_subscribe(self, topic: str) -> None:
+        # Adding a series is an explicit request for data again.
+        self._user_paused.discard(topic)
+        self._try_subscribe(topic)
+
+    def _try_subscribe(self, topic: str) -> None:
         ros = self.ros
-        if ros is not None and ros.started and ros.get_subscription(topic) is None:
-            try:
-                ros.subscribe(topic)
-            except Exception:
-                log.exception("auto-subscribe failed for %s", topic)
+        if ros is None or not ros.started or ros.get_subscription(topic) is not None:
+            return
+        self._last_attempt[topic] = time.monotonic()
+        try:
+            ros.subscribe(topic)
+        except Exception:
+            # Typically "no known type" until discovery sees the publisher.
+            log.debug("subscribe for plot failed for %s (will retry)", topic, exc_info=True)
 
     def _sample(self) -> None:
         ros = self.ros
@@ -144,6 +180,11 @@ class PlotPanel(Vertical):
         for label, (topic, _field_path, kind, steps) in self._sources.items():
             sub = ros.get_subscription(topic)
             if sub is None:
+                if (
+                    topic not in self._user_paused
+                    and ts - self._last_attempt.get(topic, -1e9) >= self.RESUBSCRIBE_PERIOD
+                ):
+                    self._try_subscribe(topic)
                 continue
             msg, _msg_ts = sub.snapshot()
             if msg is None:

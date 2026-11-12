@@ -17,13 +17,13 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.css.query import NoMatches
 from textual.reactive import reactive
-from textual.widgets import DataTable, Footer, Header, TabbedContent, TabPane, Tree
+from textual.widgets import DataTable, Footer, Header, Input, TabbedContent, TabPane, Tree
 
 from rosight.config import Config, load_user_state, save_user_state
 from rosight.ros.backend import RosBackend, RosUnavailable
 from rosight.widgets.actions_panel import ActionsPanel
 from rosight.widgets.bags_panel import BagsPanel
-from rosight.widgets.command_palette import CommandPalette
+from rosight.widgets.command_palette import CommandPalette, CommandSuggester
 from rosight.widgets.confirm_screen import ConfirmScreen
 from rosight.widgets.help_screen import HelpScreen
 from rosight.widgets.interfaces_panel import InterfacesPanel
@@ -36,6 +36,9 @@ from rosight.widgets.tf_panel import TfPanel
 from rosight.widgets.topics_panel import TopicsPanel
 
 log = logging.getLogger(__name__)
+
+# Commands kept in the palette history (and the state file).
+HISTORY_LIMIT = 50
 
 
 class RosightApp(App[int]):
@@ -85,6 +88,9 @@ class RosightApp(App[int]):
         # Set once we've told the user the executor died, so the 1 Hz status
         # tick doesn't spam notifications.
         self._executor_down_notified = False
+        self._cmd_history: list[str] = []
+        self._field_cache: dict[tuple[str, bool], list[str]] = {}
+        self._ui_state_saved = False
 
     # --------------- compose / lifecycle ---------------
 
@@ -151,6 +157,10 @@ class RosightApp(App[int]):
             self.backend_ok = self.ros.started
 
         self.set_interval(self.config.ui.discovery_period, self._refresh_status)
+        try:
+            self._restore_ui_state(load_user_state())
+        except Exception:
+            log.debug("could not restore UI state", exc_info=True)
 
     def _on_theme_changed(self, theme) -> None:
         """Persist the chosen theme so it survives restarts."""
@@ -165,6 +175,8 @@ class RosightApp(App[int]):
             log.debug("could not persist theme", exc_info=True)
 
     async def on_unmount(self) -> None:
+        if not self._ui_state_saved:
+            self._save_ui_state()
         if self._owns_ros:
             try:
                 self.ros.stop()
@@ -199,6 +211,7 @@ class RosightApp(App[int]):
         except Exception:
             running = []
         if not running:
+            self._save_ui_state()
             self.exit(0)
             return
         what = " and ".join(running)
@@ -209,6 +222,7 @@ class RosightApp(App[int]):
 
         def _done(yes: bool | None) -> None:
             if yes:
+                self._save_ui_state()
                 self.exit(0)
 
         self.push_screen(ConfirmScreen(question), _done)
@@ -217,7 +231,96 @@ class RosightApp(App[int]):
         self.push_screen(HelpScreen())
 
     def action_command(self) -> None:
-        self.push_screen(CommandPalette(), self._on_command_submitted)
+        suggester = CommandSuggester(list(self._commands), self._known_topics, self._plot_fields)
+        self.push_screen(
+            CommandPalette(history=self._cmd_history, suggester=suggester),
+            self._on_command_submitted,
+        )
+
+    # ----- completion providers for the command palette -----
+
+    def _known_topics(self) -> list[str]:
+        try:
+            snap_fn = getattr(self.ros, "graph_snapshot", None)
+            topics = snap_fn().topics if callable(snap_fn) else self.ros.list_topics()
+            return [t.name for t in topics]
+        except Exception:
+            return []
+
+    def _plot_fields(self, topic: str, arrays: bool) -> list[str]:
+        """Plottable field paths of ``topic``'s message type (cached per type)."""
+        from rosight.ros.introspection import get_message_class, iter_fields
+
+        try:
+            snap_fn = getattr(self.ros, "graph_snapshot", None)
+            topics = snap_fn().topics if callable(snap_fn) else self.ros.list_topics()
+            type_name = next(t.primary_type for t in topics if t.name == topic)
+        except Exception:
+            return []
+        key = (type_name, arrays)
+        if key not in self._field_cache:
+            try:
+                msg = get_message_class(type_name)()
+                self._field_cache[key] = [
+                    e.path
+                    for e in iter_fields(msg)
+                    if (e.is_array_numeric if arrays else e.is_numeric)
+                ]
+            except Exception:
+                self._field_cache[key] = []
+        return self._field_cache[key]
+
+    # ----- UI state persisted across restarts -----
+
+    def _filter_panels(self) -> dict[str, object]:
+        return {
+            "topics": self.query_one(TopicsPanel),
+            "nodes": self.query_one(NodesPanel),
+            "services": self.query_one(ServicesPanel),
+            "actions": self.query_one(ActionsPanel),
+            "params": self.query_one(ParamsPanel),
+        }
+
+    def _collect_ui_state(self) -> dict[str, object]:
+        return {
+            "last_tab": self.query_one(TabbedContent).active,
+            "plot_series": self.query_one(PlotPanel).sources_spec(),
+            "command_history": self._cmd_history[-HISTORY_LIMIT:],
+            "filters": {name: p.filter_text for name, p in self._filter_panels().items()},
+        }
+
+    def _save_ui_state(self) -> None:
+        try:
+            state = load_user_state()
+            state.update(self._collect_ui_state())
+            save_user_state(state)
+            self._ui_state_saved = True
+        except Exception:
+            log.debug("could not save UI state", exc_info=True)
+
+    def _restore_ui_state(self, state: dict) -> None:
+        history = state.get("command_history")
+        if isinstance(history, list):
+            self._cmd_history = [str(h) for h in history][-HISTORY_LIMIT:]
+        filters = state.get("filters")
+        if isinstance(filters, dict):
+            panels = self._filter_panels()
+            for name, value in filters.items():
+                panel = panels.get(name)
+                if panel is None or not isinstance(value, str) or not value:
+                    continue
+                panel.filter_text = value
+                try:
+                    panel.query_one("#filter", Input).value = value
+                except Exception:
+                    pass
+        series = state.get("plot_series")
+        if isinstance(series, list) and series:
+            # Subscriptions are retried by the plot until topics are discovered.
+            self.query_one(PlotPanel).restore_sources([str(s) for s in series])
+        tab = state.get("last_tab")
+        if isinstance(tab, str) and tab:
+            self.action_tab(tab)
 
     def action_refresh(self) -> None:
         self.push_status("refresh requested")
@@ -314,7 +417,9 @@ class RosightApp(App[int]):
         ros.unsubscribe(topic)
         users = 0
         try:
-            users = self.query_one(PlotPanel).series_using(topic)
+            plot = self.query_one(PlotPanel)
+            users = plot.series_using(topic)
+            plot.mark_unsubscribed(topic)
         except Exception:
             pass
         suffix = f" — {users} plot series paused" if users else ""
@@ -406,7 +511,11 @@ class RosightApp(App[int]):
     def _on_command_submitted(self, raw: str | None) -> None:
         if not raw:
             return
-        parts = raw.strip().split()
+        raw = raw.strip()
+        if not self._cmd_history or self._cmd_history[-1] != raw:
+            self._cmd_history.append(raw)
+            del self._cmd_history[:-HISTORY_LIMIT]
+        parts = raw.split()
         cmd, args = parts[0], parts[1:]
         handler = self._commands.get(cmd)
         if handler is None or not handler(args):
