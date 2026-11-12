@@ -454,8 +454,11 @@ class TopicsPanel(Vertical):
         )
 
     async def _publish(self, topic: str, type_name: str, msg: object) -> None:
+        ros = self.ros
+        if ros is None:
+            return
         try:
-            await asyncio.to_thread(self.ros.publish_once, topic, type_name, msg)
+            await asyncio.to_thread(ros.publish_once, topic, type_name, msg)
         except Exception as e:
             log.exception("publish failed")
             self.app_.notify(f"publish failed: {e}", severity="error")

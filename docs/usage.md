@@ -58,12 +58,15 @@ subscribers, service servers/clients, and action endpoints.
 
 ### Services (`3`)
 
-Service list with type. Selecting a service shows a summary; auto-form
-calling is on the roadmap.
+Service list with type. `c` opens a YAML form pre-filled with the
+request's fields (or the last request you sent); `ctrl+s` calls it in the
+background and the response is shown as YAML in the detail pane.
 
 ### Actions (`4`)
 
-Action list with type; goal/feedback monitor on roadmap.
+Action list with type. `g` opens a YAML goal form; once sent, the detail
+pane shows acceptance, live feedback and the final status and result.
+`x` cancels the running goal.
 
 ### Parameters (`5`)
 
@@ -72,8 +75,11 @@ Two-pane:
 - Left — every node on the graph
 - Right — that node's parameters with type and value
 
-Press `Enter` (or `g`) to fetch parameters for the highlighted node.
-Set/diff/yank are wired in the command palette and on the roadmap.
+Press `Enter` (or `g`) to fetch parameters for the highlighted node
+(`:param <node>` does the same from anywhere). `s` edits the highlighted
+value — the new value is type-checked against the parameter's declared
+type, arrays included — and `y` copies all parameters as a ROS 2
+params file (`<node>: ros__parameters: …`).
 
 ### Plot (`6`)
 

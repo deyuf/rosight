@@ -121,10 +121,13 @@ class ServicesPanel(GraphListPanel):
     async def _call(self, name: str, type_name: str, request: object) -> None:
         from rosight.ros.yaml_msg import message_to_yaml
 
+        ros = self.ros
+        if ros is None:
+            return
         detail = self.query_one("#srv-detail", Static)
         detail.update(Text(f"calling {name}…", style="italic"))
         try:
-            resp = await asyncio.to_thread(self.ros.call_service, name, type_name, request)
+            resp = await asyncio.to_thread(ros.call_service, name, type_name, request)
         except Exception as e:
             detail.update(Text(f"✗ call failed: {e}", style="bold red"))
             self.app_.notify(f"{name}: {e}", title="Call", severity="error")

@@ -8,8 +8,10 @@ defaults are listed below.
 [ui]
 theme = "rosight-dark"     # ui theme name
 refresh_hz = 10            # how often the status bar updates
-discovery_period = 1.0     # seconds between topic/node list refreshes
-vim_keys = true
+discovery_period = 1.0     # seconds between background graph collections
+vim_keys = true            # j / k / g / G motions in tables and trees
+export_dir = "~/rosight"   # plot CSV, image PNG, bags (default: current dir)
+bag_output_dir = "~/bags"  # overrides export_dir for ros2 bag record
 
 [plot]
 window_seconds = 30.0      # default sliding-window length
@@ -38,9 +40,12 @@ The CLI also accepts `ROSIGHT_CONFIG=path` as an env override.
 
 ## Where each setting goes
 
-- **`ui.discovery_period`** controls how often `list_topics` etc. are
-  called. Increase if you have a very busy graph and discovery becomes
-  expensive.
+- **`ui.discovery_period`** controls how often the background graph
+  monitor collects topics / nodes / services / actions. Panels read its
+  snapshot, so this is the only place discovery cost is paid. Increase it
+  on a very large graph; `r` forces an immediate collection.
+- **`ui.export_dir`** is created on first use; notifications show the full
+  path of every exported file.
 - **`plot.window_seconds`** is the initial window; `+` and `-` scale it
   interactively at runtime.
 - **`stats.window_seconds`** governs the smoothing on hz / bandwidth.
@@ -86,3 +91,9 @@ domain 5    # rclpy is reinitialised on domain 5
 The rclpy context, executor, and every active subscription are torn down and
 recreated on the new domain. The status bar's `DOMAIN_ID=` field updates
 immediately to reflect the live value (not the env var).
+
+## Runtime state
+
+Rosight also keeps `state.toml` next to the config: theme, last tab,
+panel filters, plot series and command history. It is rewritten on quit
+and never touches `config.toml`; delete it to start fresh.

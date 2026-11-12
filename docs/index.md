@@ -14,8 +14,8 @@ Nine tabs, one screen, all keyboard:
 
 - **Messages** — topic list, live `hz`/`bw`/`jitter`, message-tree drill-down, auto-QoS subscription.
 - **Nodes** — publishers, subscribers, service / action endpoints per node.
-- **Services** — discovery + types (call form planned).
-- **Actions** — discovery + types (goal monitor planned).
+- **Services** — discovery + types, call from a YAML request form.
+- **Actions** — discovery + types, send goals with live feedback and cancel.
 - **Params** — per-node parameters, get / set, type-aware.
 - **Plot** — multi-series live chart of any numeric leaf via `plotext`.
 - **TF** — auto-built frame tree from `/tf` and `/tf_static`.

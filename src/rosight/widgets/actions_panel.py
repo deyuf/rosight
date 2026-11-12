@@ -160,12 +160,15 @@ class ActionsPanel(GraphListPanel):
             state["feedback"] = fb
             self.app.call_from_thread(render)
 
+        ros = self.ros
+        if ros is None:
+            return
         self._cancel = threading.Event()
         self._running_goal = name
         render()
         try:
             status, result = await asyncio.to_thread(
-                self.ros.run_action_goal,
+                ros.run_action_goal,
                 name,
                 type_name,
                 goal,

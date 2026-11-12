@@ -11,6 +11,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -272,7 +273,7 @@ class RosightApp(App[int]):
 
     # ----- UI state persisted across restarts -----
 
-    def _filter_panels(self) -> dict[str, object]:
+    def _filter_panels(self) -> dict[str, Any]:
         return {
             "topics": self.query_one(TopicsPanel),
             "nodes": self.query_one(NodesPanel),
@@ -377,6 +378,10 @@ class RosightApp(App[int]):
         self.action_tab("topics")
         # Tab switch lays the panel out on the next refresh.
         self.call_after_refresh(self._goto, TopicsPanel, "focus_topic", topic)
+
+    def goto_node(self, fqn: str) -> None:
+        self.action_tab("nodes")
+        self.call_after_refresh(self._goto, NodesPanel, "focus_item", fqn)
 
     def goto_service(self, name: str) -> None:
         self.action_tab("services")
@@ -541,13 +546,15 @@ class RosightApp(App[int]):
     def _cmd_node(self, args: list[str]) -> bool:
         if not args:
             return False
-        self.action_tab("nodes")
+        self.goto_node(_as_fqn(args[0]))
         return True
 
     def _cmd_param(self, args: list[str]) -> bool:
         if not args:
             return False
+        fqn = _as_fqn(args[0])
         self.action_tab("params")
+        self.call_after_refresh(self._goto, ParamsPanel, "open_node", fqn)
         return True
 
     def _cmd_plot(self, args: list[str]) -> bool:
@@ -658,3 +665,8 @@ class RosightApp(App[int]):
         except Exception as e:
             log.exception("set_domain_id failed")
             self.notify(f"failed to switch domain: {e}", severity="error")
+
+
+def _as_fqn(name: str) -> str:
+    """``talker`` → ``/talker``; fully qualified names pass through."""
+    return name if name.startswith("/") else f"/{name}"

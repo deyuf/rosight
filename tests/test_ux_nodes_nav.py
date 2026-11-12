@@ -126,3 +126,41 @@ async def test_goto_unknown_topic_reports_in_status():
         for _ in range(3):
             await pilot.pause()
         assert "not in the list" in pilot.app.query_one("#status").message
+
+
+@pytest.mark.asyncio
+async def test_node_command_selects_node_and_shows_endpoints():
+    async with RosightApp(ros=RosBackend()).run_test(headless=True, size=(160, 45)) as pilot:
+        pilot.app.ros = _Ros()  # type: ignore[assignment]
+        pilot.app._on_command_submitted("node driver")  # leading slash optional
+        for _ in range(5):
+            await pilot.pause()
+        assert pilot.app.query_one(TabbedContent).active == "nodes"
+        panel = pilot.app.query_one(NodesPanel)
+        assert panel.selected == "/driver"
+        tree = panel.query_one("#node-detail", Tree)
+        assert _leaf(tree, "/odom") is not None
+
+
+@pytest.mark.asyncio
+async def test_param_command_loads_that_node():
+    from rosight.widgets.params_panel import ParamsPanel
+
+    loaded: list[str] = []
+
+    class _ParamRos(_Ros):
+        def list_parameters(self, node):
+            loaded.append(node)
+            return []
+
+        def get_parameters(self, node, names):
+            return []
+
+    async with RosightApp(ros=RosBackend()).run_test(headless=True, size=(160, 45)) as pilot:
+        pilot.app.ros = _ParamRos()  # type: ignore[assignment]
+        pilot.app._on_command_submitted("param /driver")
+        for _ in range(8):
+            await pilot.pause()
+        assert pilot.app.query_one(TabbedContent).active == "params"
+        assert pilot.app.query_one(ParamsPanel).selected_node == "/driver"
+        assert loaded == ["/driver"]

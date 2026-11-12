@@ -140,6 +140,16 @@ class ParamsPanel(Vertical):
         elif event.data_table.id == "params-table":
             self.action_set()
 
+    def open_node(self, fqn: str) -> bool:
+        """Select ``fqn`` in the node list and load its parameters."""
+        self.selected_node = fqn
+        nt = self.query_one("#nodes-table", DataTable)
+        keys = [str(r.key.value) for r in nt.ordered_rows]
+        if fqn in keys:
+            nt.move_cursor(row=keys.index(fqn), animate=False)
+        self.action_load()
+        return True
+
     def action_load(self) -> None:
         node = self.selected_node
         ros = self.ros
@@ -150,6 +160,8 @@ class ParamsPanel(Vertical):
 
     async def _load(self, node: str) -> None:
         ros = self.ros
+        if ros is None:
+            return
 
         def fetch() -> list:
             names = ros.list_parameters(node)
@@ -216,8 +228,11 @@ class ParamsPanel(Vertical):
         )
 
     async def _set(self, node: str, name: str, value: object, type_name: str) -> None:
+        ros = self.ros
+        if ros is None:
+            return
         try:
-            ok = await asyncio.to_thread(self.ros.set_parameter, node, name, value, type_name)
+            ok = await asyncio.to_thread(ros.set_parameter, node, name, value, type_name)
         except Exception as e:
             self.app_.notify(f"set {name} failed: {e}", severity="error")
             return

@@ -29,8 +29,8 @@ Nine tabs, keyboard-driven, all on one screen:
 |---|---|---|
 | `1` | **Messages** | Filter the topic table, `Enter` to subscribe, the right pane shows live hz / bw / jitter and the message tree. Press `i` for static topic info (types, publishers, QoS). Press `v` to open a live image preview for `sensor_msgs/Image` / `CompressedImage` topics. |
 | `2` | **Nodes** | Discover every node, drill into its publishers, subscribers, service servers/clients, action servers/clients. |
-| `3` | **Services** | List services with types. `c` opens a call form *(planned)*. |
-| `4` | **Actions** | List action servers with types. Goal monitor *(planned)*. |
+| `3` | **Services** | List services with types. `c` calls the service from a YAML request form and shows the response. |
+| `4` | **Actions** | List action servers with types. `g` sends a goal (YAML form) with live feedback and result; `x` cancels. |
 | `5` | **Params** | Browse parameters per node, get / set with type awareness. |
 | `6` | **Plot** | Multi-series live plot — scalar time-series **and** 1D-array snapshots (e.g. LaserScan `ranges`). Pick a numeric leaf or numeric array in the message tree and press `p` / `Enter`. Pause / window-scale / CSV export. |
 | `7` | **TF** | Auto-built frame tree from `/tf` and `/tf_static`. |
