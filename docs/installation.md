@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Linux (Ubuntu 22.04 / 24.04 recommended)
-- Python 3.10+
+- Python 3.10 (ROS 2 Humble) or Python 3.12 (ROS 2 Jazzy / Kilted) — the interpreter your ROS distro ships
 - A ROS 2 distribution (Humble, Iron, Jazzy or Rolling) — optional but
   required for any networked features
 

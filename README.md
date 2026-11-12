@@ -157,7 +157,7 @@ src/rosight/
 
 ## Tech stack & rationale — short version
 
-- **Python 3.10+** + **rclpy** (first-class ROS 2 client, dynamic message introspection via `rosidl_runtime_py`)
+- **Python 3.10 (ROS 2 Humble) or 3.12 (Jazzy / Kilted)** + **rclpy** (first-class ROS 2 client, dynamic message introspection via `rosidl_runtime_py`)
 - **Textual ≥ 0.79** (modern async TUI, CSS-like styling, headless pilot tests — that's how the 80-test suite stays meaningful for a TUI)
 - **plotext** for ANSI plotting in the Plot tab
 - **hatch + ruff + mypy + pytest-asyncio** for the dev loop

@@ -132,6 +132,6 @@ Three workflows:
 
 | File | Trigger | Job |
 |------|---------|-----|
-| `ci.yml` | push / PR | lint, tests on 3.10–3.12, build, ROS integration on Humble + Jazzy, `publish` job on main pushes |
+| `ci.yml` | push / PR | lint, tests on 3.10 + 3.12 (the ROS 2 interpreters), build, ROS integration on Humble + Jazzy, `publish` job on main pushes |
 | `release.yml` | tag `v*.*.*`, `workflow_dispatch` | legacy / manual emergency release path |
 | `docs.yml` | push to main on docs/ | mkdocs build + deploy to Pages |
