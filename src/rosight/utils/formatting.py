@@ -86,3 +86,22 @@ def format_value(value: Any, max_len: int = 60) -> str:
             return f"[{len(value)} items]"
         return truncate(repr(list(value)), max_len)
     return truncate(str(value), max_len)
+
+
+_SPARK_BLOCKS = "▁▂▃▄▅▆▇█"
+
+
+def sparkline(values: list[float] | tuple[float, ...], width: int | None = None) -> str:
+    """Render ``values`` as a unicode block sparkline.
+
+    Scaled to the max of the window (min pinned at 0) so a steady rate
+    reads as a flat line and drop-outs are obvious. Empty input → "".
+    """
+    vals = list(values)[-width:] if width else list(values)
+    if not vals:
+        return ""
+    top = max(vals)
+    if top <= 0:
+        return _SPARK_BLOCKS[0] * len(vals)
+    last = len(_SPARK_BLOCKS) - 1
+    return "".join(_SPARK_BLOCKS[max(0, min(last, round(v / top * last)))] for v in vals)

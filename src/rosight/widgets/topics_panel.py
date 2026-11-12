@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from typing import TYPE_CHECKING
 
 from rich.text import Text
@@ -12,14 +13,20 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from rosight.utils.datatable import (
-    current_row_key,
-    fit_last_column,
-    fit_last_column_when_ready,
-    restore_cursor,
+from rosight.utils.datatable import fit_last_column, fit_last_column_when_ready, sync_table
+from rosight.utils.formatting import format_bytes, format_rate, short_type, sparkline
+from rosight.utils.fuzzy import matches
+from rosight.widgets._base import (
+    PLACEHOLDER_KEY,
+    empty_state_text,
+    fetch_graph_items,
+    placeholder_row,
 )
-from rosight.utils.formatting import format_bytes, format_rate, short_type
 from rosight.widgets.message_tree import MessageTree
+
+# Seconds of Hz history shown in the Trend column (one sample per refresh).
+_TREND_LEN = 12
+_COLUMNS = ("Topic", "Type", "Pub", "Sub", "Hz", "Trend", "BW")
 
 if TYPE_CHECKING:
     from rosight.app import RosightApp
@@ -78,12 +85,14 @@ class TopicsPanel(Vertical):
         # (selected_topic, last_msg_ts) of the message currently in the tree;
         # used to skip the O(fields) rebuild when nothing changed.
         self._tree_ts: tuple[str | None, float] = (None, 0.0)
+        self._graph_gen: int | None = None
+        self._hz_hist: dict[str, deque[float]] = {}
 
     # ---------------- compose ----------------
 
     def compose(self) -> ComposeResult:
         with Vertical(id="left"):
-            yield Input(placeholder="filter topics…", id="filter")
+            yield Input(placeholder="filter topics… (fuzzy)", id="filter")
             yield DataTable(id="topics-table", cursor_type="row", zebra_stripes=True)
         with Vertical(id="right"):
             yield Static("select a topic", id="detail-header")
@@ -92,8 +101,9 @@ class TopicsPanel(Vertical):
 
     def on_mount(self) -> None:
         table = self.query_one("#topics-table", DataTable)
-        table.add_columns("Topic", "Type", "Pub", "Sub", "Hz", "BW")
+        table.add_columns(*_COLUMNS)
         fit_last_column_when_ready(table)
+        self._render_table()
         self._refresh_table()
         self.set_interval(1.0, self._refresh_table)
         self.set_interval(0.25, self._refresh_detail)
@@ -122,19 +132,18 @@ class TopicsPanel(Vertical):
         return getattr(self.app_, "ros", None)
 
     def _refresh_table(self) -> None:
-        # Skip when the tab is hidden — every panel's set_interval keeps
-        # firing in the background otherwise, and the 1 s rclpy round-trip
-        # adds up across all panels.
+        # Skip when the tab is hidden — timers keep firing in the background.
         if self.region.width == 0:
             return
         ros = self.ros
         if ros is None or not ros.started:
             return
         try:
-            self._topic_cache = ros.list_topics()
+            self._topic_cache, self._graph_gen = fetch_graph_items(ros, "topics", "list_topics")
         except Exception:
             log.exception("list_topics failed")
             return
+        self._sample_trends()
         self._render_table()
 
     def on_show(self) -> None:
@@ -142,52 +151,67 @@ class TopicsPanel(Vertical):
         # wait up to a full interval for fresh data.
         self._refresh_table()
 
+    def _subs_by_topic(self) -> dict[str, Subscription]:
+        ros = self.ros
+        if ros is None:
+            return {}
+        try:
+            return {s.topic: s for s in ros.active_subscriptions()}
+        except Exception:
+            return {}
+
+    def _sample_trends(self) -> None:
+        """Append one Hz sample per subscribed topic (called at 1 Hz)."""
+        subs = self._subs_by_topic()
+        for topic in list(self._hz_hist):
+            if topic not in subs:
+                del self._hz_hist[topic]
+        for topic, sub in subs.items():
+            hist = self._hz_hist.setdefault(topic, deque(maxlen=_TREND_LEN))
+            hist.append(sub.rate.sample().hz)
+
+    def _row_cells(self, ti: TopicInfo, sub: Subscription | None) -> tuple:
+        hz_cell: Text | str = "—"
+        bw_str = "—"
+        trend = ""
+        if sub is not None:
+            hz = sub.rate.sample().hz
+            if sub.qos_incompatible and hz == 0:
+                hz_cell = Text("QoS!", style="bold red")
+            else:
+                hz_cell = format_rate(hz)
+            bw_str = format_bytes(sub.bandwidth.sample().bytes_per_sec) + "/s"
+            trend = sparkline(tuple(self._hz_hist.get(ti.name, ())))
+        return (
+            Text(ti.name, style="bold" if sub is not None else ""),
+            Text(short_type(ti.primary_type), style="dim"),
+            str(ti.publisher_count),
+            str(ti.subscriber_count),
+            hz_cell,
+            Text(trend, style="green"),
+            bw_str,
+        )
+
     def _render_table(self) -> None:
         table = self.query_one("#topics-table", DataTable)
-        # Preserve BOTH axes — `clear()` resets scroll to (0, 0), which made
-        # the user's horizontal scroll position jump back every tick.
-        scroll = table.scroll_offset
-        selected_key = current_row_key(table)
-        # One lock-protected call to get every active sub at once, then a
-        # dict lookup per row instead of N lock acquisitions.
-        subs_by_topic = {s.topic: s for s in self.ros.active_subscriptions()} if self.ros else {}
-        table.clear()
-        ft = self.filter_text.lower().strip()
-        new_idx = -1
-        idx = 0
-        for ti in self._topic_cache:
-            if ft and ft not in ti.name.lower() and ft not in ti.primary_type.lower():
-                continue
-            sub = subs_by_topic.get(ti.name)
-            hz_str = "—"
-            bw_str = "—"
-            if sub is not None:
-                rs = sub.rate.sample()
-                bs = sub.bandwidth.sample()
-                hz_str = format_rate(rs.hz)
-                bw_str = format_bytes(bs.bytes_per_sec) + "/s"
-            row_style = "bold" if sub is not None else ""
-            table.add_row(
-                Text(ti.name, style=row_style),
-                Text(short_type(ti.primary_type), style="dim"),
-                str(ti.publisher_count),
-                str(ti.subscriber_count),
-                hz_str,
-                bw_str,
-                key=ti.name,
-            )
-            if ti.name == selected_key:
-                new_idx = idx
-            idx += 1
-        restore_cursor(table, selected_key, new_idx)
-        try:
-            table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
-        except Exception:
-            pass
-        fit_last_column(table)
+        # One lock-protected call for every active sub, then a dict lookup
+        # per row instead of N lock acquisitions.
+        subs = self._subs_by_topic()
+        rows = [
+            (ti.name, self._row_cells(ti, subs.get(ti.name)))
+            for ti in self._topic_cache
+            if matches(self.filter_text, ti.name, ti.primary_type)
+        ]
+        if not rows:
+            text = empty_state_text(self.ros, self._graph_gen, self.filter_text, "topics")
+            rows = [placeholder_row(text, len(_COLUMNS))]
+        # Incremental: on a normal tick only the Hz/Trend/BW cells change,
+        # so cursor and scroll stay put and nothing flickers.
+        if sync_table(table, rows):
+            fit_last_column(table)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.row_key is None:
+        if event.row_key is None or str(event.row_key.value) == PLACEHOLDER_KEY:
             return
         self.selected_topic = str(event.row_key.value)
 
@@ -198,7 +222,7 @@ class TopicsPanel(Vertical):
         # consumes the keypress and emits this RowSelected event instead.
         # Translating it back into action_echo restores the original UX:
         # pressing Enter on a row subscribes to that topic.
-        if event.row_key is None:
+        if event.row_key is None or str(event.row_key.value) == PLACEHOLDER_KEY:
             return
         self.selected_topic = str(event.row_key.value)
         self.action_echo()
@@ -312,15 +336,22 @@ class TopicsPanel(Vertical):
             return
         rs = sub.rate.sample()
         bs = sub.bandwidth.sample()
-        header.update(
-            Text.assemble(
-                (f"{topic}\n", "bold cyan"),
-                (f"type: {short_type(sub.type_name)}   ", "dim"),
-                (f"hz: {format_rate(rs.hz)}   ", "yellow"),
-                (f"bw: {format_bytes(bs.bytes_per_sec)}/s   ", "magenta"),
-                (f"jitter: {rs.jitter_ms:.1f}ms", "green"),
-            )
+        text = Text.assemble(
+            (f"{topic}\n", "bold cyan"),
+            (f"type: {short_type(sub.type_name)}   ", "dim"),
+            (f"hz: {format_rate(rs.hz)}   ", "yellow"),
+            (f"bw: {format_bytes(bs.bytes_per_sec)}/s   ", "magenta"),
+            (f"jitter: {rs.jitter_ms:.1f}ms", "green"),
         )
+        if sub.qos_incompatible:
+            text.append(
+                f"\n⚠ incompatible QoS with publisher: {sub.qos_incompatible.lower()}"
+                f" ({sub.qos_incompatible_count}x) — press i for publisher QoS",
+                style="bold red",
+            )
+        if sub.decode_errors:
+            text.append(f"\n⚠ {sub.decode_errors} message(s) failed to decode", style="red")
+        header.update(text)
         if not self.paused:
             msg, ts = sub.snapshot()
             if msg is not None:

@@ -131,3 +131,67 @@ def invalidate_fit_cache(table: Any) -> None:
         table._rosight_fit_cache = None
     except Exception:
         pass
+
+
+def sync_table(table: Any, rows: list[tuple[str, tuple[Any, ...]]]) -> bool:
+    """Make ``table`` show ``rows`` (``(key, cells)`` pairs) with minimal work.
+
+    * Same keys in the same order (the common case on a refresh tick):
+      only cells whose value changed are rewritten via ``update_cell``.
+      Cursor, scroll position and selection are untouched, so nothing
+      flickers or jumps.
+    * Keys added/removed/reordered: the table is rebuilt once, then the
+      cursor is put back on the previously highlighted key and the scroll
+      offset restored.
+
+    Returns True when the table was rebuilt or a cell changed width (the
+    caller should re-run :func:`fit_last_column`), False otherwise.
+    """
+    cache: dict[str, tuple[Any, ...]] = getattr(table, "_rosight_cells", None) or {}
+    new_keys = [k for k, _ in rows]
+    try:
+        old_keys = [str(r.key.value) for r in table.ordered_rows]
+    except Exception:
+        old_keys = []
+
+    if new_keys == old_keys and len(cache) == len(new_keys):
+        col_keys = list(table.columns.keys())
+        widened = False
+        for key, cells in rows:
+            prev = cache.get(key)
+            if prev == cells:
+                continue
+            for idx, value in enumerate(cells):
+                if prev is not None and idx < len(prev) and prev[idx] == value:
+                    continue
+                old_w = _cell_width(prev[idx]) if prev is not None and idx < len(prev) else -1
+                if _cell_width(value) != old_w:
+                    widened = True
+                table.update_cell(key, col_keys[idx], value, update_width=True)
+            cache[key] = cells
+        table._rosight_cells = cache
+        return widened
+
+    selected = current_row_key(table)
+    scroll = getattr(table, "scroll_offset", None)
+    table.clear()
+    cache = {}
+    new_idx = -1
+    for idx, (key, cells) in enumerate(rows):
+        table.add_row(*cells, key=key)
+        cache[key] = cells
+        if key == selected:
+            new_idx = idx
+    table._rosight_cells = cache
+    restore_cursor(table, selected, new_idx)
+    if scroll is not None:
+        try:
+            table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
+        except Exception:
+            pass
+    return True
+
+
+def _cell_width(value: Any) -> int:
+    plain = getattr(value, "plain", None)
+    return len(plain if isinstance(plain, str) else str(value))

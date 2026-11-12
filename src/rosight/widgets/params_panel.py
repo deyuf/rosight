@@ -12,8 +12,15 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from rosight.utils.datatable import fit_last_column_when_ready
+from rosight.utils.datatable import fit_last_column, fit_last_column_when_ready, sync_table
 from rosight.utils.formatting import format_value
+from rosight.utils.fuzzy import matches
+from rosight.widgets._base import (
+    PLACEHOLDER_KEY,
+    empty_state_text,
+    fetch_graph_items,
+    placeholder_row,
+)
 
 if TYPE_CHECKING:
     from rosight.app import RosightApp
@@ -93,21 +100,23 @@ class ParamsPanel(Vertical):
         if ros is None or not ros.started:
             return
         try:
-            nodes = ros.list_nodes()
+            nodes, gen = fetch_graph_items(ros, "nodes", "list_nodes")
         except Exception:
             log.exception("list_nodes failed")
             return
         nt = self.query_one("#nodes-table", DataTable)
-        nt.clear()
-        ft = self.filter_text.lower().strip()
-        for n in nodes:
-            if ft and ft not in n.fqn.lower():
-                continue
-            nt.add_row(n.fqn, key=n.fqn)
+        rows = [(n.fqn, (n.fqn,)) for n in nodes if matches(self.filter_text, n.fqn)]
+        if not rows:
+            rows = [placeholder_row(empty_state_text(ros, gen, self.filter_text, "nodes"), 1)]
+        if sync_table(nt, rows):
+            fit_last_column(nt)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.data_table.id == "nodes-table" and event.row_key is not None:
-            self.selected_node = str(event.row_key.value)
+        if event.data_table.id != "nodes-table" or event.row_key is None:
+            return
+        key = str(event.row_key.value)
+        if key != PLACEHOLDER_KEY:
+            self.selected_node = key
 
     def action_load(self) -> None:
         node = self.selected_node
