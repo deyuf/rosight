@@ -190,11 +190,15 @@ jobs:
           TERM: xterm-256color
           COLUMNS: "120"
           LINES: "40"
+        # The ROS images auto-register launch_testing's pytest plugins.
+        # Humble's version declares the `path` hook argument that pytest 9
+        # removed, so pytest aborts before collecting anything. rosight
+        # doesn't use launch_testing; keep both of its plugins out.
         run: |
           set -e
           source /opt/ros/${{ matrix.distro }}/setup.bash
           source /opt/rosight-venv/bin/activate
-          pytest -q --tb=short tests/
+          pytest -q --tb=short -p no:launch_testing -p no:launch_ros tests/
       - name: Headless launch smoke
         shell: bash
         env:
