@@ -8,6 +8,7 @@ leaf — nested inside the widget so Textual generates the handler name
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -33,10 +34,22 @@ class MessageTree(Tree[FieldEntry]):
         is_numeric: bool
         kind: Literal["scalar", "array"] = "scalar"
 
+    @dataclass
+    class SearchRequested(Message):
+        """User pressed ``/`` in the tree; the host shows a search box."""
+
     BINDINGS = [
         ("p", "select_field", "Plot field"),
         ("enter", "activate", "Expand / plot"),
+        ("slash", "search", "Search"),
+        ("n", "search_next", "Next match"),
+        ("N", "search_prev", "Prev match"),
+        ("y", "yank_path", "Copy path"),
+        ("Y", "yank_value", "Copy value"),
     ]
+
+    # How long a changed value stays highlighted.
+    FLASH_SECONDS = 0.6
 
     DEFAULT_CSS = """
     MessageTree {
@@ -53,9 +66,16 @@ class MessageTree(Tree[FieldEntry]):
         # signature it was built from. Used to update in place.
         self._nodes_by_path: dict[str, TreeNode[FieldEntry]] = {}
         self._signature: tuple[tuple[str, bool], ...] | None = None
+        # path -> highlight deadline for values that just changed.
+        self._flash: dict[str, float] = {}
+        self._leaf_by_path: dict[str, bool] = {}
+        self.search_query = ""
         # Counters exposed for tests / diagnostics.
         self.rebuilds = 0
         self.label_updates = 0
+
+    def on_mount(self) -> None:
+        self.set_interval(0.2, self._expire_flash)
 
     def update_message(self, msg: object) -> None:
         """Show the fields of ``msg``.
@@ -87,13 +107,30 @@ class MessageTree(Tree[FieldEntry]):
 
     def _update_in_place(self, entries: list[FieldEntry], leaves: list[bool]) -> None:
         nodes = self._nodes_by_path
+        deadline = time.monotonic() + self.FLASH_SECONDS
         for entry, leaf in zip(entries, leaves, strict=True):
             node = nodes.get(entry.path)
             if node is None or node.data == entry:
                 continue
             node.data = entry
-            node.set_label(_format_label(entry, leaf))
+            # Highlight changed leaf values so moving fields stand out.
+            flash = leaf
+            if flash:
+                self._flash[entry.path] = deadline
+            node.set_label(_format_label(entry, leaf, flash=flash))
             self.label_updates += 1
+
+    def _expire_flash(self) -> None:
+        if not self._flash:
+            return
+        now = time.monotonic()
+        for path, until in list(self._flash.items()):
+            if until > now:
+                continue
+            del self._flash[path]
+            node = self._nodes_by_path.get(path)
+            if node is not None and node.data is not None:
+                node.set_label(_format_label(node.data, self._leaf_by_path.get(path, True)))
 
     def _rebuild(self, entries: list[FieldEntry], leaves: list[bool]) -> None:
         self.rebuilds += 1
@@ -122,11 +159,80 @@ class MessageTree(Tree[FieldEntry]):
                 nodes[entry.path] = child
                 node_stack.append((entry.path, child))
         self._nodes_by_path = nodes
+        self._leaf_by_path = {e.path: leaf for e, leaf in zip(entries, leaves, strict=True)}
+        self._flash.clear()
 
         target = nodes.get(cursor_path) if cursor_path else None
         if target is not None:
             # Line numbers are assigned on the next layout pass.
             self.call_after_refresh(self.move_cursor, target)
+
+    # ----- search ------------------------------------------------------------
+
+    def action_search(self) -> None:
+        self.post_message(self.SearchRequested())
+
+    def search(self, query: str, *, forward: bool = True, from_start: bool = False) -> bool:
+        """Move the cursor to the next field whose path matches ``query``.
+
+        Case-insensitive substring match on the full path (e.g. ``pos.x``
+        doesn't match but ``position.x`` and ``x`` do). Wraps around.
+        Collapsed ancestors of the match are expanded. Returns False when
+        nothing matches.
+        """
+        self.search_query = query.strip()
+        q = self.search_query.lower()
+        if not q:
+            return False
+        paths = list(self._nodes_by_path)
+        if not paths:
+            return False
+        cur = self.cursor_node
+        cur_path = cur.data.path if cur is not None and cur.data is not None else None
+        start = -1 if from_start or cur_path not in paths else paths.index(cur_path)
+        n = len(paths)
+        step = 1 if forward else -1
+        for i in range(1, n + 1):
+            path = paths[(start + step * i) % n]
+            if q in path.lower():
+                node = self._nodes_by_path[path]
+                parent = node.parent
+                while parent is not None:
+                    parent.expand()
+                    parent = parent.parent
+                self.call_after_refresh(self.move_cursor, node)
+                return True
+        return False
+
+    def action_search_next(self) -> None:
+        self._search_step(forward=True)
+
+    def action_search_prev(self) -> None:
+        self._search_step(forward=False)
+
+    def _search_step(self, *, forward: bool) -> None:
+        if not self.search_query:
+            self.action_search()
+            return
+        if not self.search(self.search_query, forward=forward):
+            self.notify(f"no field matches {self.search_query!r}", severity="warning")
+
+    # ----- copy -------------------------------------------------------------
+
+    def action_yank_path(self) -> None:
+        node = self.cursor_node
+        if node is not None and node.data is not None:
+            self._copy(node.data.path, "path")
+
+    def action_yank_value(self) -> None:
+        node = self.cursor_node
+        if node is not None and node.data is not None:
+            self._copy(format_value(node.data.value), "value")
+
+    def _copy(self, text: str, what: str) -> None:
+        # OSC 52: works over SSH and in most modern terminals.
+        self.app.copy_to_clipboard(text)
+        self.notify(f"copied {what}: {text}", timeout=2)
 
     def action_select_field(self) -> None:
         node = self.cursor_node
@@ -196,7 +302,7 @@ def _leaf_flags(entries: list[FieldEntry]) -> list[bool]:
     return flags
 
 
-def _format_label(entry: FieldEntry, leaf: bool) -> Text:
+def _format_label(entry: FieldEntry, leaf: bool, *, flash: bool = False) -> Text:
     name = entry.path.rsplit(".", 1)[-1].rsplit("[", 1)[-1]
     if "[" in entry.path.split(".")[-1]:
         # array element: keep the index visible
@@ -213,7 +319,7 @@ def _format_label(entry: FieldEntry, leaf: bool) -> Text:
     elif isinstance(entry.value, str) and entry.value.startswith("<"):
         text.append(entry.value, style="dim italic")
     elif leaf:
-        text.append(format_value(entry.value), style="cyan")
+        text.append(format_value(entry.value), style="bold black on yellow" if flash else "cyan")
         text.append(f"  : {short_type(entry.type_name)}", style="dim")
     else:
         text.append(short_type(entry.type_name), style="dim")

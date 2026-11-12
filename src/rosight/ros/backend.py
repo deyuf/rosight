@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -105,6 +106,11 @@ class ParameterValue:
 # ---------------------------------------------------------------------------
 
 
+# Echo history kept per subscription for stepping through while paused.
+# Bounded by count AND bytes so an image topic can't eat the RAM.
+HISTORY_LEN = 100
+HISTORY_BYTES = 16 * 1024 * 1024
+
 # Re-estimate the serialized size of *decoded* messages at most this often.
 # Only used when raw subscriptions are unavailable; raw mode measures
 # ``len(bytes)`` for free on every message.
@@ -151,6 +157,9 @@ class Subscription:
         self._size_est = 0
         self._size_est_ts = -1e9
         self.decode_errors = 0
+        # (payload, receive_ts, is_raw, size_bytes), oldest first.
+        self._history: deque[tuple[Any, float, bool, int]] = deque()
+        self._history_bytes = 0
         # Last incompatible-QoS report from rclpy, e.g. "RELIABILITY".
         self.qos_incompatible: str | None = None
         self.qos_incompatible_count = 0
@@ -173,6 +182,7 @@ class Subscription:
         with self._lock:
             self._raw = data
             self._ts = ts
+            self._remember(data, ts, True, len(data))
             cbs = list(self.callbacks)
         if cbs:
             # Callbacks want message objects, so pay for one decode here —
@@ -190,6 +200,7 @@ class Subscription:
         self.bandwidth.tick(self._size_est, ts)
         self._set_latest(msg, ts)
         with self._lock:
+            self._remember(msg, ts, False, self._size_est)
             cbs = list(self.callbacks)
         if cbs:
             self._dispatch(cbs, msg)
@@ -200,6 +211,34 @@ class Subscription:
             self._msg = msg
             self._ts = ts
             self._decoded_ts = ts
+
+    def _remember(self, payload: Any, ts: float, is_raw: bool, size: int) -> None:
+        """Append to the history ring. Caller holds ``_lock``."""
+        self._history.append((payload, ts, is_raw, size))
+        self._history_bytes += size
+        while self._history and (
+            len(self._history) > HISTORY_LEN
+            or (self._history_bytes > HISTORY_BYTES and len(self._history) > 1)
+        ):
+            self._history_bytes -= self._history.popleft()[3]
+
+    def history(self) -> list[tuple[Any, float, bool, int]]:
+        """Copy of the history ring (references only — cheap), oldest first."""
+        with self._lock:
+            return list(self._history)
+
+    def decode_entry(self, entry: tuple[Any, float, bool, int]) -> Any:
+        """Message object for a history entry (decodes raw bytes)."""
+        payload, _ts, is_raw, _size = entry
+        if not is_raw:
+            return payload
+        if self._decode is None:
+            return None
+        try:
+            return self._decode(payload)
+        except Exception:
+            log.debug("history decode failed on %s", self.topic, exc_info=True)
+            return None
 
     @staticmethod
     def _dispatch(cbs: list[Callable[[Any], None]], msg: Any) -> None:

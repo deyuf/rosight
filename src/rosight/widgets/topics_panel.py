@@ -44,6 +44,9 @@ class TopicsPanel(Vertical):
         Binding("i", "info", "Info"),
         Binding("v", "view_image", "View image"),
         Binding("space", "toggle_pause", "Pause"),
+        Binding("left_square_bracket", "history(1)", "Older", show=False),
+        Binding("right_square_bracket", "history(-1)", "Newer", show=False),
+        Binding("escape", "close_search", "Close search", show=False),
         Binding("P", "publish", "Publish"),
         Binding("/", "filter", "Filter"),
     ]
@@ -72,6 +75,8 @@ class TopicsPanel(Vertical):
         max-height: 10;
     }
     TopicsPanel MessageTree { height: 1fr; }
+    TopicsPanel #tree-search { display: none; height: 3; }
+    TopicsPanel #tree-search.-visible { display: block; }
     """
 
     filter_text: reactive[str] = reactive("")
@@ -86,6 +91,9 @@ class TopicsPanel(Vertical):
         self._tree_ts: tuple[str | None, float] = (None, 0.0)
         self._graph_gen: int | None = None
         self._hz_hist: dict[str, deque[float]] = {}
+        # Echo history frozen at pause time: (topic, entries); index 0 = newest.
+        self._frozen: tuple[str, list] | None = None
+        self._hist_idx = 0
 
     # ---------------- compose ----------------
 
@@ -96,6 +104,7 @@ class TopicsPanel(Vertical):
         with Vertical(id="right"):
             yield Static("select a topic", id="detail-header")
             yield Static("", id="info-area")
+            yield Input(placeholder="search fields…  enter: find · n/N: next/prev", id="tree-search")
             yield MessageTree(id="msg-tree")
 
     def on_mount(self) -> None:
@@ -263,6 +272,76 @@ class TopicsPanel(Vertical):
 
     def action_toggle_pause(self) -> None:
         self.paused = not self.paused
+        self._frozen = None
+        self._hist_idx = 0
+        if self.paused:
+            self._freeze_history()
+        else:
+            self._tree_ts = (None, 0.0)  # force the live message back in
+        self._refresh_detail()
+
+    def _freeze_history(self) -> None:
+        topic = self.selected_topic
+        sub = self.ros.get_subscription(topic) if topic and self.ros else None
+        self._frozen = (topic, sub.history()) if sub is not None and topic else None
+
+    def action_history(self, step: int) -> None:
+        """While paused, step through the last messages ([ older, ] newer)."""
+        if not self.paused:
+            self.app_.push_status("pause first (space) to step through message history")
+            return
+        if self._frozen is None or self._frozen[0] != self.selected_topic:
+            self._freeze_history()
+            self._hist_idx = 0
+        if self._frozen is None or not self._frozen[1]:
+            self.app_.push_status("no message history for this topic yet")
+            return
+        last = len(self._frozen[1]) - 1
+        self._hist_idx = max(0, min(last, self._hist_idx + step))
+        self._show_history_entry()
+
+    def _show_history_entry(self) -> None:
+        if self._frozen is None or self.ros is None:
+            return
+        topic, entries = self._frozen
+        sub = self.ros.get_subscription(topic)
+        if sub is None or not entries:
+            return
+        msg = sub.decode_entry(entries[-1 - self._hist_idx])
+        self.query_one("#msg-tree", MessageTree).update_message(msg)
+        self._refresh_detail()
+
+    def _history_caption(self) -> str:
+        if not self.paused:
+            return ""
+        if self._frozen is None or not self._frozen[1]:
+            return "⏸ paused"
+        entries = self._frozen[1]
+        idx = self._hist_idx
+        age = entries[-1][1] - entries[-1 - idx][1]
+        pos = f"{len(entries) - idx}/{len(entries)}"
+        return f"⏸ paused · message {pos} ({age:+.2f}s from newest) · [ older  ] newer"
+
+    # ---------------- field search ----------------
+
+    def on_message_tree_search_requested(self, _event: MessageTree.SearchRequested) -> None:
+        box = self.query_one("#tree-search", Input)
+        box.add_class("-visible")
+        box.focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "tree-search":
+            return
+        tree = self.query_one("#msg-tree", MessageTree)
+        if not tree.search(event.value):
+            self.app_.notify(f"no field matches {event.value!r}", severity="warning")
+        self.action_close_search()
+
+    def action_close_search(self) -> None:
+        box = self.query_one("#tree-search", Input)
+        if box.has_class("-visible"):
+            box.remove_class("-visible")
+            self.query_one("#msg-tree", MessageTree).focus()
 
     def action_info(self) -> None:
         topic = self.selected_topic
@@ -366,6 +445,9 @@ class TopicsPanel(Vertical):
             )
         if sub.decode_errors:
             text.append(f"\n⚠ {sub.decode_errors} message(s) failed to decode", style="red")
+        caption = self._history_caption()
+        if caption:
+            text.append(f"\n{caption}", style="bold yellow")
         header.update(text)
         if not self.paused:
             msg, ts = sub.snapshot()
