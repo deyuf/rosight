@@ -266,13 +266,15 @@ class ImagePreviewScreen(ModalScreen[None]):
             return
         # Sanitize topic into a filename-safe stem.
         safe = self.topic.strip("/").replace("/", "_") or "image"
-        out = Path.cwd() / f"rosight-{safe}-{int(time.time())}.png"
+        name = f"rosight-{safe}-{int(time.time())}.png"
+        export = getattr(self.app, "export_path", None)
+        out = export(name) if callable(export) else Path.cwd() / name
         try:
             self._last_decoded.save(out)
         except Exception as e:
             self.app.notify(f"save failed: {e}", title="Image", severity="error")
             return
-        self.app.notify(f"saved {out.name}", title="Image")
+        self.app.notify(f"saved {out}", title="Image")
 
 
 # ----- helpers --------------------------------------------------------------

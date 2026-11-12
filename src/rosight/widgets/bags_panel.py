@@ -234,7 +234,7 @@ class BagsPanel(Vertical):
             self._record_proc = _track(subprocess.Popen(cmd, **self._CHILD_KW))
             self._set_recording(True)
             self.app_.notify(
-                f"recording to {out_dir.name}\npress R or s to stop",
+                f"recording to {out_dir}\npress R or s to stop",
                 title="Bag",
             )
         except FileNotFoundError:
@@ -275,9 +275,9 @@ class BagsPanel(Vertical):
         can pin it to a tmp_path without touching the filesystem.
         """
         cfg = getattr(getattr(self.app_, "config", None), "ui", None)
-        base = getattr(cfg, "bag_output_dir", None)
+        base = getattr(cfg, "bag_output_dir", None) or getattr(cfg, "export_dir", None)
         root = Path(base).expanduser() if base else Path.cwd()
-        return root / f"rosight-bag-{int(time.time())}"
+        return (root / f"rosight-bag-{int(time.time())}").resolve()
 
     def action_stop(self) -> None:
         stopped = False

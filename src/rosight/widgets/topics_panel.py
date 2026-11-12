@@ -40,9 +40,8 @@ class TopicsPanel(Vertical):
 
     BINDINGS = [
         Binding("enter", "echo", "Echo"),
+        Binding("x", "unsubscribe", "Unsub"),
         Binding("i", "info", "Info"),
-        Binding("h", "hz", "Hz"),
-        Binding("b", "bw", "BW"),
         Binding("v", "view_image", "View image"),
         Binding("space", "toggle_pause", "Pause"),
         Binding("P", "publish", "Publish"),
@@ -182,8 +181,14 @@ class TopicsPanel(Vertical):
                 hz_cell = format_rate(hz)
             bw_str = format_bytes(sub.bandwidth.sample().bytes_per_sec) + "/s"
             trend = sparkline(tuple(self._hz_hist.get(ti.name, ())))
+        name = Text()
+        if sub is not None:
+            name.append("● ", style="bold green")
+            name.append(ti.name, style="bold")
+        else:
+            name.append("  " + ti.name)
         return (
-            Text(ti.name, style="bold" if sub is not None else ""),
+            name,
             Text(short_type(ti.primary_type), style="dim"),
             str(ti.publisher_count),
             str(ti.subscriber_count),
@@ -283,12 +288,18 @@ class TopicsPanel(Vertical):
         # `_refresh_detail` doesn't clobber it.
         self.query_one("#info-area", Static).update(text)
 
-    def action_hz(self) -> None:
-        # hz info is already shown in the table; ensure subscription so it ticks.
-        self.action_echo()
-
-    def action_bw(self) -> None:
-        self.action_echo()
+    def action_unsubscribe(self) -> None:
+        """Stop receiving the selected topic (frees bandwidth and CPU)."""
+        topic = self.selected_topic
+        if not topic:
+            return
+        unsub = getattr(self.app_, "unsubscribe_topic", None)
+        if not callable(unsub) or not unsub(topic):
+            self.app_.push_status(f"not subscribed: {topic}")
+            return
+        self._tree_ts = (None, 0.0)
+        self._render_table()
+        self._refresh_detail()
 
     def action_publish(self) -> None:  # pragma: no cover — interactive
         self.app_.notify(
@@ -331,7 +342,11 @@ class TopicsPanel(Vertical):
         header = self.query_one("#detail-header", Static)
         tree = self.query_one("#msg-tree", MessageTree)
         if sub is None:
-            header.update(f"{topic}\n[press enter to subscribe]")
+            # Text, not a markup string: "[press enter…]" would be parsed
+            # as a Rich markup tag.
+            header.update(
+                Text.assemble((f"{topic}\n", "bold cyan"), ("enter: subscribe", "dim italic"))
+            )
             tree.update_message(None)
             return
         rs = sub.rate.sample()

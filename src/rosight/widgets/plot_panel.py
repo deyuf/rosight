@@ -121,6 +121,13 @@ class PlotPanel(Vertical):
         self._auto_subscribe(topic)
         return label
 
+    def series_using(self, topic: str) -> int:
+        return sum(1 for src in self._sources.values() if src[0] == topic)
+
+    def _export_path(self, filename: str) -> Path:
+        export = getattr(self.app, "export_path", None)
+        return export(filename) if callable(export) else Path.cwd() / filename
+
     def _auto_subscribe(self, topic: str) -> None:
         ros = self.ros
         if ros is not None and ros.started and ros.get_subscription(topic) is None:
@@ -225,7 +232,7 @@ class PlotPanel(Vertical):
         if not self._sources:
             self.app_.push_status("no series to save")
             return
-        out = Path.cwd() / f"rosight-{int(time.time())}.csv"
+        out = self._export_path(f"rosight-{int(time.time())}.csv")
         try:
             with out.open("w", newline="") as f:
                 w = csv.writer(f)
@@ -238,7 +245,7 @@ class PlotPanel(Vertical):
                     elif isinstance(series, SnapshotSeries):
                         for i, v in enumerate(series.values):
                             w.writerow(["snapshot", i, label, v])
-            self.app_.push_status(f"saved {out.name}")
+            self.app_.notify(f"saved {out}", title="Plot CSV")
         except Exception as e:
             self.app_.push_status(f"save failed: {e}")
 

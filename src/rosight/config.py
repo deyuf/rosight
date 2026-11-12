@@ -44,8 +44,10 @@ class UIConfig:
     refresh_hz: float = 10.0
     discovery_period: float = 1.0  # how often to refresh topic/node lists
     vim_keys: bool = True
+    # Where exported files (plot CSV, image PNG, bags) go. ``None`` → cwd.
+    export_dir: str | None = None
     # Where ``ros2 bag record -o`` should write its output dir. ``None``
-    # → fall back to ``Path.cwd()`` (legacy behavior).
+    # → ``export_dir`` → cwd.
     bag_output_dir: str | None = None
 
 

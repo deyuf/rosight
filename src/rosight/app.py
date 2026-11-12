@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -196,23 +197,59 @@ class RosightApp(App[int]):
             log.info(msg)
         log.info("status: %s", msg)
 
-    def add_plot_series(self, topic: str, field_path: str) -> None:
-        """Forward field-selected events from the topics panel to plot."""
+    def add_plot_series(self, topic: str, field_path: str, *, switch: bool = False) -> None:
+        """Add a scalar field to the plot.
+
+        From the message tree we stay on the current tab (``switch=False``)
+        so several fields can be added in a row; the status bar confirms
+        each one. The ``:plot`` command jumps to the plot.
+        """
         try:
-            panel = self.query_one(PlotPanel)
-            panel.add_series(topic, field_path)
-            self.action_tab("plot")
+            self.query_one(PlotPanel).add_series(topic, field_path)
+            if switch:
+                self.action_tab("plot")
         except Exception:
             log.exception("could not add plot series")
 
-    def add_plot_snapshot_series(self, topic: str, field_path: str) -> None:
-        """Forward array-field selection from the topics panel to plot."""
+    def add_plot_snapshot_series(
+        self, topic: str, field_path: str, *, switch: bool = False
+    ) -> None:
+        """Add a numeric-array field as a snapshot series (see add_plot_series)."""
         try:
-            panel = self.query_one(PlotPanel)
-            panel.add_snapshot_series(topic, field_path)
-            self.action_tab("plot")
+            self.query_one(PlotPanel).add_snapshot_series(topic, field_path)
+            if switch:
+                self.action_tab("plot")
         except Exception:
             log.exception("could not add plot snapshot series")
+
+    def export_path(self, filename: str) -> Path:
+        """Absolute path for an exported file, honouring ``ui.export_dir``.
+
+        Creates the directory if needed; falls back to cwd if it can't.
+        """
+        base = self.config.ui.export_dir
+        root = Path(base).expanduser() if base else Path.cwd()
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            log.warning("export_dir %s not writable, using cwd", root)
+            root = Path.cwd()
+        return (root / filename).resolve()
+
+    def unsubscribe_topic(self, topic: str) -> bool:
+        """Drop a subscription; warn if plot series depend on it."""
+        ros = self.ros
+        if ros is None or ros.get_subscription(topic) is None:
+            return False
+        ros.unsubscribe(topic)
+        users = 0
+        try:
+            users = self.query_one(PlotPanel).series_using(topic)
+        except Exception:
+            pass
+        suffix = f" — {users} plot series paused" if users else ""
+        self.push_status(f"unsubscribed {topic}{suffix}")
+        return True
 
     # --------------- background tickers ---------------
 
@@ -293,6 +330,7 @@ class RosightApp(App[int]):
             "help": self._cmd_help,
             "domain": self._cmd_domain,
             "reconnect": self._cmd_reconnect,
+            "unsub": self._cmd_unsub,
         }
 
     def _on_command_submitted(self, raw: str | None) -> None:
@@ -336,13 +374,13 @@ class RosightApp(App[int]):
     def _cmd_plot(self, args: list[str]) -> bool:
         if len(args) < 2:
             return False
-        self.add_plot_series(args[0], args[1])
+        self.add_plot_series(args[0], args[1], switch=True)
         return True
 
     def _cmd_plot_array(self, args: list[str]) -> bool:
         if len(args) < 2:
             return False
-        self.add_plot_snapshot_series(args[0], args[1])
+        self.add_plot_snapshot_series(args[0], args[1], switch=True)
         return True
 
     def _cmd_view(self, args: list[str]) -> bool:
@@ -362,6 +400,21 @@ class RosightApp(App[int]):
 
     def _cmd_help(self, _args: list[str]) -> bool:
         self.action_help()
+        return True
+
+    def _cmd_unsub(self, args: list[str]) -> bool:
+        if not args:
+            return False
+        ros = self.ros
+        if args[0] == "all":
+            topics = [s.topic for s in ros.active_subscriptions()] if ros else []
+        else:
+            topics = [args[0]]
+        done = [t for t in topics if self.unsubscribe_topic(t)]
+        if args[0] == "all":
+            self.push_status(f"unsubscribed {len(done)} topic(s)")
+        elif not done:
+            self.push_status(f"not subscribed: {args[0]}")
         return True
 
     def _cmd_reconnect(self, _args: list[str]) -> bool:
