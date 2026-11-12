@@ -14,6 +14,7 @@ from collections.abc import Callable
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
+from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, TabbedContent, TabPane
 
@@ -216,7 +217,12 @@ class RosightApp(App[int]):
     # --------------- background tickers ---------------
 
     def _refresh_status(self) -> None:
-        bar = self.query_one("#status", StatusBar)
+        # The interval timer can still fire while the app is tearing down
+        # its screen, after the status bar has been removed.
+        try:
+            bar = self.query_one("#status", StatusBar)
+        except NoMatches:
+            return
         # The status ticker fires on a timer and is independent of test
         # setup/teardown ordering. Tests sometimes swap ``self.ros`` for a
         # minimal stub that mimics only the methods they exercise, so reach

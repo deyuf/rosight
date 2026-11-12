@@ -239,3 +239,15 @@ async def test_refresh_key_wakes_graph_monitor():
         pilot.app.ros = ros  # type: ignore[assignment]
         pilot.app.action_refresh()
         assert ros.refresh_requests == 1
+
+
+@pytest.mark.asyncio
+async def test_status_ticker_tolerates_missing_status_bar():
+    """The 1 Hz status timer can fire while the app tears its screen down
+    (seen on CI): ``#status`` is already gone and ``query_one`` raised
+    NoMatches, failing an unrelated test. The tick must just no-op."""
+    app = RosightApp(ros=RosBackend())
+    async with app.run_test(headless=True, size=(140, 40)) as pilot:
+        await pilot.app.query_one("#status", StatusBar).remove()
+        await pilot.pause()
+        pilot.app._refresh_status()  # must not raise
