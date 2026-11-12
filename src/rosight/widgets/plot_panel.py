@@ -13,9 +13,17 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import DataTable, Static
 
-from rosight.utils.datatable import fit_last_column_when_ready
+from rosight.utils.datatable import (
+    ellipsize,
+    ellipsize_left,
+    fit_last_column,
+    fit_last_column_when_ready,
+    sync_table,
+    table_width,
+)
 from rosight.utils.formatting import format_value
 from rosight.utils.path import PathStep, get_value, parse_path
+from rosight.widgets._base import placeholder_row
 from rosight.widgets.plot_view import PlotSeries, PlotView, SnapshotSeries
 
 SeriesKind = Literal["scalar", "array"]
@@ -60,12 +68,14 @@ class PlotPanel(Vertical):
         # ``parsed_steps`` is the pre-parsed result of ``parse_path`` —
         # caching it shaves a regex pass per series per sample tick.
         self._sources: dict[str, tuple[str, str, SeriesKind, list[PathStep]]] = {}
+        self._last_attempt: dict[str, float] = {}
+        self._user_paused: set[str] = set()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="plot-area"):
             yield PlotView(id="plot")
         with Vertical(id="side"):
-            yield Static("Series", id="side-header")
+            yield Static("", id="side-header")
             yield DataTable(id="side-table", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -121,13 +131,54 @@ class PlotPanel(Vertical):
         self._auto_subscribe(topic)
         return label
 
+    # Retry subscribing a plotted topic at most this often (it may not be
+    # discovered yet at startup, or a reconnect/domain switch dropped it).
+    RESUBSCRIBE_PERIOD = 2.0
+
+    def sources_spec(self) -> list[str]:
+        """Series as ``kind|topic|field`` strings (for the state file)."""
+        return [f"{kind}|{topic}|{path}" for topic, path, kind, _ in self._sources.values()]
+
+    def restore_sources(self, specs: list[str]) -> int:
+        added = 0
+        for spec in specs:
+            kind, _, rest = str(spec).partition("|")
+            topic, _, path = rest.partition("|")
+            if not topic or not path:
+                continue
+            if kind == "array":
+                self.add_snapshot_series(topic, path)
+            else:
+                self.add_series(topic, path)
+            added += 1
+        return added
+
+    def mark_unsubscribed(self, topic: str) -> None:
+        """The user unsubscribed on purpose: stop auto-resubscribing it."""
+        self._user_paused.add(topic)
+
+    def series_using(self, topic: str) -> int:
+        return sum(1 for src in self._sources.values() if src[0] == topic)
+
+    def _export_path(self, filename: str) -> Path:
+        export = getattr(self.app, "export_path", None)
+        return export(filename) if callable(export) else Path.cwd() / filename
+
     def _auto_subscribe(self, topic: str) -> None:
+        # Adding a series is an explicit request for data again.
+        self._user_paused.discard(topic)
+        self._try_subscribe(topic)
+
+    def _try_subscribe(self, topic: str) -> None:
         ros = self.ros
-        if ros is not None and ros.started and ros.get_subscription(topic) is None:
-            try:
-                ros.subscribe(topic)
-            except Exception:
-                log.exception("auto-subscribe failed for %s", topic)
+        if ros is None or not ros.started or ros.get_subscription(topic) is not None:
+            return
+        self._last_attempt[topic] = time.monotonic()
+        try:
+            ros.subscribe(topic)
+        except Exception:
+            # Typically "no known type" until discovery sees the publisher.
+            log.debug("subscribe for plot failed for %s (will retry)", topic, exc_info=True)
 
     def _sample(self) -> None:
         ros = self.ros
@@ -137,6 +188,11 @@ class PlotPanel(Vertical):
         for label, (topic, _field_path, kind, steps) in self._sources.items():
             sub = ros.get_subscription(topic)
             if sub is None:
+                if (
+                    topic not in self._user_paused
+                    and ts - self._last_attempt.get(topic, -1e9) >= self.RESUBSCRIBE_PERIOD
+                ):
+                    self._try_subscribe(topic)
                 continue
             msg, _msg_ts = sub.snapshot()
             if msg is None:
@@ -168,8 +224,9 @@ class PlotPanel(Vertical):
     def _refresh_table(self) -> None:
         if self.region.width == 0:
             return
+        self._update_side_header()
         st = self.query_one("#side-table", DataTable)
-        st.clear()
+        values: list[tuple[str, str, str]] = []  # key, label, value
         for label, (_topic, _path, kind, _steps) in self._sources.items():
             series = self.plot.series.get(label)
             cur_text = "—"
@@ -181,10 +238,34 @@ class PlotPanel(Vertical):
             elif isinstance(series, SnapshotSeries):
                 stat = series.stats()
                 if stat:
-                    mn, mx, ln = stat
-                    cur_text = f"n={ln} [{format_value(mn)}…{format_value(mx)}]"
-            suffix = " (snap)" if kind == "array" else ""
-            st.add_row(_truncate(label + suffix, 28), cur_text, key=label)
+                    mn, mx, _ln = stat
+                    cur_text = f"{format_value(mn)}…{format_value(mx)}"
+            suffix = " [snap]" if kind == "array" else ""
+            values.append((label, label + suffix, cur_text))
+        # Fit the pane: the value column gets what it needs (capped), the
+        # series name gets the rest and is shortened from the left — the
+        # field name at the end is what tells series apart.
+        width = table_width(st)
+        value_w = min(16, max([len("Last")] + [len(v) for _, _, v in values]))
+        label_w = max(8, width - value_w - 4) if width else 40
+        rows = [
+            (key, (ellipsize_left(label, label_w), ellipsize(value, value_w)))
+            for key, label, value in values
+        ]
+        if not rows:
+            rows = [placeholder_row("no series", 2)]
+        if sync_table(st, rows):
+            fit_last_column(st)
+
+    def _update_side_header(self) -> None:
+        plot = self.plot
+        parts = [f"window {plot.window_seconds:.0f} s", f"{len(self._sources)} series"]
+        if plot.paused:
+            parts.append("PAUSED")
+        try:
+            self.query_one("#side-header", Static).update(" · ".join(parts))
+        except Exception:
+            pass
 
     # -------- key actions ----------------------------------------------
 
@@ -225,7 +306,7 @@ class PlotPanel(Vertical):
         if not self._sources:
             self.app_.push_status("no series to save")
             return
-        out = Path.cwd() / f"rosight-{int(time.time())}.csv"
+        out = self._export_path(f"rosight-{int(time.time())}.csv")
         try:
             with out.open("w", newline="") as f:
                 w = csv.writer(f)
@@ -238,7 +319,7 @@ class PlotPanel(Vertical):
                     elif isinstance(series, SnapshotSeries):
                         for i, v in enumerate(series.values):
                             w.writerow(["snapshot", i, label, v])
-            self.app_.push_status(f"saved {out.name}")
+            self.app_.notify(f"saved {out}", title="Plot CSV")
         except Exception as e:
             self.app_.push_status(f"save failed: {e}")
 

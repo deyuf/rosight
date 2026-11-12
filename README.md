@@ -20,6 +20,7 @@ without a mouse. Built for SSH, tmux, robot consoles.
 📖 **Docs:** <https://deyuf.github.io/rosight/>
 
 ![Messages tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/01-messages.png)
+*Messages — subscribed topics with Hz / bandwidth / trend; the message tree highlights values as they change*
 
 ## What's inside
 
@@ -27,14 +28,14 @@ Nine tabs, keyboard-driven, all on one screen:
 
 | `#` | Tab | What you can do |
 |---|---|---|
-| `1` | **Messages** | Filter the topic table, `Enter` to subscribe, the right pane shows live hz / bw / jitter and the message tree. Press `i` for static topic info (types, publishers, QoS). Press `v` to open a live image preview for `sensor_msgs/Image` / `CompressedImage` topics. |
-| `2` | **Nodes** | Discover every node, drill into its publishers, subscribers, service servers/clients, action servers/clients. |
-| `3` | **Services** | List services with types. `c` opens a call form *(planned)*. |
-| `4` | **Actions** | List action servers with types. Goal monitor *(planned)*. |
-| `5` | **Params** | Browse parameters per node, get / set with type awareness. |
-| `6` | **Plot** | Multi-series live plot — scalar time-series **and** 1D-array snapshots (e.g. LaserScan `ranges`). Pick a numeric leaf or numeric array in the message tree and press `p` / `Enter`. Pause / window-scale / CSV export. |
+| `1` | **Messages** | Fuzzy-filter the topic table (● marks subscribed topics; Hz, bandwidth and an Hz trend sparkline per topic). `Enter` subscribes, `x` unsubscribes. The message tree highlights values as they change; `/` searches fields, `y` / `Y` copy a path / value. `Space` pauses and `[` / `]` step through the last 100 messages. `P` publishes from a YAML form, `i` shows publisher QoS, `v` previews `Image` / `CompressedImage` topics. |
+| `2` | **Nodes** | Every node with its publishers, subscribers and service endpoints as a tree — `Enter` on an entry jumps to that topic or service. |
+| `3` | **Services** | `c` calls a service from a YAML request form (pre-filled, remembers your last request) and shows the response. |
+| `4` | **Actions** | `g` sends a goal from a YAML form with live feedback and final status / result; `x` cancels. |
+| `5` | **Params** | Per-node parameters. `s` sets a value (type-checked, arrays included), `y` copies all of them as a ROS 2 params file. |
+| `6` | **Plot** | Multi-series live plot — scalar time-series **and** 1D-array snapshots (e.g. LaserScan `ranges`). Add fields with `p` / `Enter` in the message tree without leaving it. Pause, window scaling, CSV export. |
 | `7` | **TF** | Auto-built frame tree from `/tf` and `/tf_static`. |
-| `8` | **Bags** | `ros2 bag record` / `play` / `info`. The header tells you which key stops the recording while it's running. |
+| `8` | **Bags** | `ros2 bag record` / `play` / `info`. Recorders are stopped gracefully (bag finalized) and never outlive the app. |
 | `9` | **Interfaces** | Browse `msg` / `srv` / `action` definitions of every interface package on the system. |
 
 Image rendering uses the terminal's native graphics protocol when
@@ -44,24 +45,32 @@ for the support matrix.
 
 ### Screenshots
 
-![Nodes tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/02-nodes.png)
-*Nodes (`2`)*
-
-![Services tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/03-services.png)
-*Services (`3`)*
-
-![Actions tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/04-actions.png)
-*Actions (`4`)*
-
-![Bags tab](https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/06-bags.png)
-*Bags (`8`) — recording state*
+<table>
+<tr>
+<td width="50%"><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/05-plot.png" alt="Plot tab"/><br/><em>Plot — time-series and a LaserScan snapshot</em></td>
+<td width="50%"><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/02-nodes.png" alt="Nodes tab"/><br/><em>Nodes — enter on an endpoint jumps to it</em></td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/04-actions.png" alt="Actions tab"/><br/><em>Actions — goal running with live feedback</em></td>
+<td><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/03-services.png" alt="Services tab"/><br/><em>Services — call result</em></td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/08-params.png" alt="Params tab"/><br/><em>Params — s: set · y: copy as params YAML</em></td>
+<td><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/09-publish-form.png" alt="Publish form"/><br/><em>Publish / call / goal forms are YAML</em></td>
+</tr>
+<tr>
+<td><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/10-command-palette.png" alt="Command palette"/><br/><em>Command palette — completes topics and field paths</em></td>
+<td><img src="https://raw.githubusercontent.com/deyuf/rosight/main/docs/screenshots/06-bags.png" alt="Bags tab"/><br/><em>Bags — recording state</em></td>
+</tr>
+</table>
 
 Cross-cutting features:
 
-- **Auto-QoS** — subscriber profile is negotiated to match every publisher of a topic (BEST_EFFORT vs RELIABLE, TRANSIENT_LOCAL, etc.), so sensor topics "just work".
-- **Theme persistence** — pick a theme via `Ctrl+P → Change theme`; it survives restarts (stored next to your config in a small `state.toml`).
-- **Runtime domain switch** — `:domain 5` reconnects the rclpy backend on a new `ROS_DOMAIN_ID` without restarting the app.
-- **Live notifications** — important actions (subscribed, started recording, switched domain) show as toasts; nothing important hides in a covered status bar.
+- **Auto-QoS** — the subscriber profile is negotiated to match every publisher (BEST_EFFORT vs RELIABLE, TRANSIENT_LOCAL, …), so sensor topics "just work". If a publisher is still incompatible, the topic says so (`QoS!`) instead of silently showing 0 Hz.
+- **Cheap on busy graphs** — subscriptions receive raw bytes and decode only what is on screen; the graph is discovered once per second on a background thread, never on the UI loop.
+- **Remembers your session** — theme, last tab, filters, plot series and command history are restored on the next start (`state.toml`, next to your config).
+- **Fast navigation** — fuzzy filters everywhere, `:` palette with completion and history, `j` / `k` / `g` / `G` motions, node → topic jumps.
+- **Runtime domain switch** — `:domain 5` reconnects on a new `ROS_DOMAIN_ID` without restarting; `:reconnect` restarts the backend if its executor ever stops (the status bar turns red).
 - **No ROS required for the UI** — the package imports cleanly without `rclpy`, so you can dev / unit-test on cloud machines. Run with `--no-ros` to stay offline.
 
 ## Install
@@ -109,16 +118,18 @@ rosight --no-ros
 Inside the app:
 
 - `?` — keyboard reference overlay
-- `:` — command palette (`topic <filter>`, `plot <topic> <path>`, `record`, `domain <N>`, `quit`)
+- `:` — command palette with completion (`topic <filter>`, `plot <topic> <field>`, `node <name>`, `param <node>`, `unsub <topic|all>`, `domain <N>`, `reconnect`, `quit`)
 - `1`–`9` — jump to a tab
-- `q` or `Ctrl+C` — quit
-- `r` — manual refresh
+- `/` — fuzzy-filter the current panel
+- `q` or `Ctrl+C` — quit (asks first while a bag is recording)
+- `r` — rediscover the ROS graph now
 
 Plotting workflow (the question new users ask most):
 
 1. **Messages tab**, cursor over a topic, **Enter** to subscribe (focus auto-jumps to the message tree)
 2. Use arrow keys / Space to expand fields in the tree
-3. Cursor on a *numeric* leaf (int / float), press **p** — series is added and the Plot tab opens
+3. Cursor on a *numeric* leaf (int / float), press **p** — the series is added and you stay in the tree, so you can add more
+4. Press **6** for the Plot tab (or type `:plot /odom twist.twist.linear.x`, which adds and opens it)
 
 ## Documentation
 
@@ -139,36 +150,42 @@ Full docs site: <https://deyuf.github.io/rosight/>
 
 ```
 src/rosight/
-├── app.py             # Textual App, panel registry, global key bindings
+├── app.py             # Textual App, panel registry, global keys, palette commands, state
 ├── cli.py             # argparse entry point
 ├── config.py          # TOML config loader + state.toml persistence
 ├── ros/
-│   ├── backend.py     # central rclpy facade (lifecycle, sub mgmt, domain switch)
-│   ├── introspection.py  # dynamic message-type resolution
+│   ├── backend.py     # rclpy facade: lifecycle, raw subscriptions, publish,
+│   │                  # services, parameters, action goals, executor health
+│   ├── discovery.py   # GraphMonitor thread + GraphSnapshot
+│   ├── introspection.py  # dynamic message-type resolution, field walking
+│   ├── yaml_msg.py    # message <-> YAML for the forms
 │   ├── qos.py         # plain-data QoS + auto-negotiation
 │   └── stats.py       # hz / bw monitors
 ├── utils/
-│   ├── datatable.py   # row-cursor preservation + last-column auto-fit
+│   ├── datatable.py   # incremental table sync + last-column auto-fit
+│   ├── fuzzy.py       # fuzzy filter
 │   ├── ringbuffer.py  # thread-safe bounded buffers
 │   ├── path.py        # message field-path parser
-│   └── formatting.py  # human-readable display helpers
-└── widgets/           # one file per panel + status bar / help / palette
+│   └── formatting.py  # display helpers, sparklines
+└── widgets/           # one file per panel, GraphListPanel base (_base.py),
+                       # message tree, YAML form, palette, help, status bar
 ```
 
 ## Tech stack & rationale — short version
 
-- **Python 3.10+** + **rclpy** (first-class ROS 2 client, dynamic message introspection via `rosidl_runtime_py`)
-- **Textual ≥ 0.79** (modern async TUI, CSS-like styling, headless pilot tests — that's how the 80-test suite stays meaningful for a TUI)
-- **plotext** for ANSI plotting in the Plot tab
+- **Python 3.10 (ROS 2 Humble) or 3.12 (Jazzy / Kilted)** + **rclpy** (first-class ROS 2 client, dynamic message introspection via `rosidl_runtime_py`)
+- **Textual** (modern async TUI, CSS-like styling, headless pilot tests — that's how a 350-test suite stays meaningful for a TUI)
+- **plotext 5** for ANSI plotting in the Plot tab
 - **hatch + ruff + mypy + pytest-asyncio** for the dev loop
 - **MkDocs Material** for the docs site
-- rclpy runs on its own `MultiThreadedExecutor` daemon thread so DDS spinning never blocks the Textual main loop. See [`DESIGN.md`](DESIGN.md) for the full reasoning.
+- rclpy runs on its own `SingleThreadedExecutor` thread with raw-bytes subscriptions, and graph discovery has a thread of its own, so the Textual loop never waits on DDS. See the [architecture page](docs/architecture.md) for the full reasoning.
 
 ## Status
 
-Beta. Discovery, subscription, plotting, TF, bag record/play, theme persistence,
-runtime domain switch — all working. Auto-forms for service call and action
-goal are on the roadmap.
+Beta. Discovery, subscription, plotting, publish, service calls, action
+goals, parameter editing, TF, bag record / play, state persistence and
+runtime domain switch all work, tested headless and against real rclpy on
+Humble and Jazzy in CI.
 
 ## License
 

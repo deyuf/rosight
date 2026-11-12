@@ -15,6 +15,13 @@ if str(SRC) not in sys.path:
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolated_user_dirs(tmp_path_factory, monkeypatch):
+    """Keep tests from reading or writing the developer's real
+    ~/.config/rosight (theme, UI state, command history)."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg-config")))
+
+
 @pytest.fixture
 def tiny_message():
     """A duck-typed ROS message for testing introspection without rclpy."""

@@ -35,7 +35,7 @@ app doesn't guess. Full workflow:
 1. **Messages tab** — cursor over a topic with a non-zero `Pub` count.
 2. **Enter** → subscribe. Focus moves to the message tree on the right.
 3. Use arrow keys / Space to drill into sub-messages (`pose` → `position` → `x`).
-4. With the cursor on a **numeric leaf** (int / float; not string / array / sub-message), press **p**. The series is added and the Plot tab opens.
+4. With the cursor on a **numeric leaf** (int / float; not string / sub-message), press **p**. The series is added and you stay in the tree; press **6** to see the plot. (`Enter` on a numeric array marked `[plot ↵]` adds a snapshot series.)
 
 If `p` does nothing on a leaf, check that the field is numeric — a toast
 will tell you `field <path> is not numeric — skipped` for the wrong kind.

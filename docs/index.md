@@ -12,12 +12,12 @@ without a mouse. Built for SSH, tmux, robot consoles.
 
 Nine tabs, one screen, all keyboard:
 
-- **Messages** — topic list, live `hz`/`bw`/`jitter`, message-tree drill-down, auto-QoS subscription.
-- **Nodes** — publishers, subscribers, service / action endpoints per node.
-- **Services** — discovery + types (call form planned).
-- **Actions** — discovery + types (goal monitor planned).
-- **Params** — per-node parameters, get / set, type-aware.
-- **Plot** — multi-series live chart of any numeric leaf via `plotext`.
+- **Messages** — topic list with live Hz / bandwidth / trend, message tree that highlights changing values, field search and copy, paused history stepping, publish form, auto-QoS subscription.
+- **Nodes** — publishers, subscribers and services per node; jump straight to any of them.
+- **Services** — discovery + types, call from a YAML request form.
+- **Actions** — discovery + types, send goals with live feedback and cancel.
+- **Params** — per-node parameters, type-checked set, copy as a params file.
+- **Plot** — multi-series live chart of any numeric field or numeric array via `plotext`.
 - **TF** — auto-built frame tree from `/tf` and `/tf_static`.
 - **Bags** — `ros2 bag record` / `play` / `info` with stop hints.
 - **Interfaces** — browse every `msg` / `srv` / `action` definition on the system.
@@ -26,9 +26,18 @@ Nine tabs, one screen, all keyboard:
 
 - **Runs anywhere a terminal does.** SSH, tmux, robot console, phone via Termius.
 - **Auto-QoS.** Sensor topics (`BEST_EFFORT`, `TRANSIENT_LOCAL` …) are matched by negotiating against every publisher — no manual profile fiddling.
-- **Runtime domain switch.** `:domain 5` reconnects on a new `ROS_DOMAIN_ID` without restarting.
-- **Theme persistence.** Pick a Textual theme via `Ctrl+P`; it survives restarts.
+- **Cheap on busy graphs.** Subscriptions receive raw bytes and decode only what's on screen; discovery runs once per second on its own thread.
+- **Runtime domain switch.** `:domain 5` reconnects on a new `ROS_DOMAIN_ID` without restarting; `:reconnect` if the executor ever stops.
+- **Remembers your session.** Theme, last tab, filters, plot series and command history survive restarts.
 - **Stable when ROS isn't there.** The package imports cleanly without `rclpy`, so you can run unit tests and tweak the UI on cloud hosts. Live panels light up the moment a workspace is sourced.
+
+## Gallery
+
+| | |
+|---|---|
+| ![Plot](screenshots/05-plot.svg) Plot | ![Nodes](screenshots/02-nodes.svg) Nodes |
+| ![Actions](screenshots/04-actions.svg) Action goal with feedback | ![Params](screenshots/08-params.svg) Params |
+| ![Publish form](screenshots/09-publish-form.svg) YAML publish form | ![Palette](screenshots/10-command-palette.svg) Palette completion |
 
 ## Next steps
 

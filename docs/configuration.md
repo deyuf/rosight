@@ -8,8 +8,10 @@ defaults are listed below.
 [ui]
 theme = "rosight-dark"     # ui theme name
 refresh_hz = 10            # how often the status bar updates
-discovery_period = 1.0     # seconds between topic/node list refreshes
-vim_keys = true
+discovery_period = 1.0     # seconds between background graph collections
+vim_keys = true            # j / k / g / G motions in tables and trees
+export_dir = "~/rosight"   # plot CSV, image PNG, bags (default: current dir)
+bag_output_dir = "~/bags"  # overrides export_dir for ros2 bag record
 
 [plot]
 window_seconds = 30.0      # default sliding-window length
@@ -38,9 +40,12 @@ The CLI also accepts `ROSIGHT_CONFIG=path` as an env override.
 
 ## Where each setting goes
 
-- **`ui.discovery_period`** controls how often `list_topics` etc. are
-  called. Increase if you have a very busy graph and discovery becomes
-  expensive.
+- **`ui.discovery_period`** controls how often the background graph
+  monitor collects topics / nodes / services / actions. Panels read its
+  snapshot, so this is the only place discovery cost is paid. Increase it
+  on a very large graph; `r` forces an immediate collection.
+- **`ui.export_dir`** is created on first use; notifications show the full
+  path of every exported file.
 - **`plot.window_seconds`** is the initial window; `+` and `-` scale it
   interactively at runtime.
 - **`stats.window_seconds`** governs the smoothing on hz / bandwidth.
@@ -56,22 +61,29 @@ silently ignored to keep older configs compatible.
 
 ## Persisted runtime state
 
-Things you change inside the app (currently just the **theme** picked from
-`Ctrl+P → Change theme`) are written to a separate small file next to your
-config so Rosight never rewrites your hand-edited `config.toml`:
+Things you change inside the app are written to a separate small file next
+to your config, so Rosight never rewrites your hand-edited `config.toml`:
+the **theme** (`Ctrl+P → Change theme`), the **last tab**, every panel's
+**filter**, the **plot series** and the **command-palette history**.
 
 ```
 $XDG_CONFIG_HOME/rosight/state.toml
 ```
 
-Example content after picking a theme:
+Example content:
 
 ```toml
-theme = "textual-light"
+"theme" = "textual-light"
+"last_tab" = "plot"
+"plot_series" = ["scalar|/odom|twist.twist.linear.x", "array|/scan|ranges"]
+"command_history" = ["plot /odom twist.twist.linear.x", "domain 3"]
+
+["filters"]
+"topics" = "odom"
 ```
 
-Delete the file to fall back to whatever `[ui] theme` is set in your config
-(or the built-in default if neither exists).
+It is written when you quit. Delete it to start fresh (the theme then falls
+back to `[ui] theme` in your config, or the built-in default).
 
 ## Runtime domain switch
 
@@ -84,5 +96,8 @@ domain 5    # rclpy is reinitialised on domain 5
 ```
 
 The rclpy context, executor, and every active subscription are torn down and
-recreated on the new domain. The status bar's `DOMAIN_ID=` field updates
-immediately to reflect the live value (not the env var).
+recreated on the new domain (in the background, so the UI stays responsive).
+The status bar's `DOMAIN_ID=` field updates to the live value, and plotted
+topics resubscribe automatically once they appear on the new domain.
+`:reconnect` does the same on the current domain — the status bar offers it
+if the executor thread ever stops.

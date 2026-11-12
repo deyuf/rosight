@@ -14,10 +14,11 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
 from rosight.utils.datatable import (
-    current_row_key,
+    ellipsize_middle,
     fit_last_column,
     fit_last_column_when_ready,
-    restore_cursor,
+    sync_table,
+    table_width,
 )
 
 if TYPE_CHECKING:
@@ -57,12 +58,14 @@ class InterfacesPanel(Vertical):
 
     def on_mount(self) -> None:
         t = self.query_one("#iface-table", DataTable)
-        t.add_columns("Type", "Kind")
+        # The kind (msg/srv/action) is already part of the path.
+        t.add_columns("Interface")
         fit_last_column_when_ready(t)
         self._discover()
         self._render_table()
 
     def on_resize(self) -> None:
+        self.call_after_refresh(self._render_table)
         fit_last_column_when_ready(self.query_one("#iface-table", DataTable))
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -113,22 +116,23 @@ class InterfacesPanel(Vertical):
 
     def _render_table(self) -> None:
         t = self.query_one("#iface-table", DataTable)
-        scroll = t.scroll_offset
-        selected_key = current_row_key(t)
-        t.clear()
         ft = self.filter_text.lower().strip()
-        new_idx = -1
-        for idx, (name, kind) in enumerate(
-            (n, k) for n, k in self._cache if not ft or ft in n.lower()
-        ):
-            t.add_row(name, kind, key=name)
-            if name == selected_key:
-                new_idx = idx
-        restore_cursor(t, selected_key, new_idx)
-        try:
-            t.scroll_to(x=scroll.x, y=scroll.y, animate=False)
-        except Exception:
-            pass
+        # Real interface names (rcl_interfaces/msg/ParameterDescriptor …)
+        # can be wider than the pane: shorten the middle, keeping the
+        # package and the type name readable. The row key stays exact.
+        # sync_table re-measures the column, so names rendered while the
+        # tab was hidden (width unknown, not shortened) don't keep it wide.
+        # Reserve the cell padding and the vertical scrollbar (the list is
+        # usually long enough to need one).
+        width = table_width(t)
+        room = width - 2 - int(t.styles.scrollbar_size_vertical or 0)
+        rows = [
+            (name, (ellipsize_middle(name, room) if width else name,))
+            for name, _kind in self._cache
+            if not ft or ft in name.lower()
+        ]
+        sync_table(t, rows)
+        # Also on resize when no cell changed: the column must follow the pane.
         fit_last_column(t)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -168,11 +172,14 @@ class InterfacesPanel(Vertical):
             else:
                 cls = get_action_class(name)
             text = Text()
-            text.append(f"{name}\n\n", style="bold cyan")
             fields = getattr(cls, "get_fields_and_field_types", None)
             if callable(fields):
-                for fname, ftype in fields().items():
-                    text.append(f"{ftype:30s} ", style="yellow")
+                items = list(fields().items())
+                # Align field names on the longest type of this message (a
+                # fixed 30 broke on types like TwistWithCovariance).
+                type_w = max((len(t) for _, t in items), default=0) + 2
+                for fname, ftype in items:
+                    text.append(ftype.ljust(type_w), style="yellow")
                     text.append(f"{fname}\n", style="white")
             else:
                 text.append(repr(cls))

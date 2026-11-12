@@ -19,7 +19,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering",
     "Topic :: System :: Monitoring",
@@ -31,7 +30,8 @@ dependencies = [
     # that may change in 2.x. Bump deliberately after re-validating.
     "textual>=0.79,<9.0",
     "rich>=13.7",
-    "plotext>=5.2",
+    # plotext 6 is an API rewrite (no clf/plotsize/build); PlotView targets 5.x.
+    "plotext>=5.2,<6",
     "pyyaml>=6.0",
     "tomli>=2.0;python_version<'3.11'",
     "platformdirs>=4.0",

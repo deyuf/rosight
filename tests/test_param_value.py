@@ -95,9 +95,42 @@ def test_build_param_value_bool_precedence_over_int():
 
 def test_build_param_value_rejects_unsupported():
     with pytest.raises(TypeError):
-        _build_param_value(_PV(), [1, 2, 3])
-    with pytest.raises(TypeError):
         _build_param_value(_PV(), None)
+    with pytest.raises(TypeError):
+        _build_param_value(_PV(), {"a": 1})
+    with pytest.raises(TypeError, match="infer"):
+        _build_param_value(_PV(), [])  # no hint → ambiguous
+    with pytest.raises(TypeError, match="infer"):
+        _build_param_value(_PV(), [1, "a"])  # mixed
+
+
+@pytest.mark.parametrize(
+    ("value", "type_id", "attr", "stored"),
+    [
+        ([True, False], 6, "bool_array_value", [True, False]),
+        ([1, 2, 3], 7, "integer_array_value", [1, 2, 3]),
+        ([1, 2.5], 8, "double_array_value", [1.0, 2.5]),
+        (["a", "b"], 9, "string_array_value", ["a", "b"]),
+    ],
+)
+def test_build_param_value_infers_arrays(value, type_id, attr, stored):
+    pv = _build_param_value(_PV(), value)
+    assert pv.type == type_id
+    assert getattr(pv, attr) == stored
+
+
+def test_type_hint_keeps_double_and_array_kinds():
+    assert _build_param_value(_PV(), 1, "double").double_value == 1.0
+    pv = _build_param_value(_PV(), [1, 2], "double_array")
+    assert pv.type == 8 and pv.double_array_value == [1.0, 2.0]
+    pv = _build_param_value(_PV(), [], "string_array")
+    assert pv.type == 9 and pv.string_array_value == []
+    pv = _build_param_value(_PV(), [1, 255], "byte_array")
+    assert pv.type == 5 and pv.byte_array_value == [b"\x01", b"\xff"]
+    with pytest.raises(TypeError):
+        _build_param_value(_PV(), [1, "x"], "integer_array")
+    with pytest.raises(TypeError):
+        _build_param_value(_PV(), [256], "byte_array")
 
 
 @pytest.mark.parametrize(
@@ -134,3 +167,12 @@ def test_unknown_type_returns_none():
     pv = _PV()
     pv.type = 99
     assert _param_value(pv) is None
+
+
+@pytest.mark.parametrize(
+    ("hint", "bad"),
+    [("double", "abc"), ("integer", 1.5), ("bool", 1), ("string", 3)],
+)
+def test_scalar_type_hint_rejects_mismatch(hint, bad):
+    with pytest.raises(TypeError, match=f"expected a {hint}"):
+        _build_param_value(_PV(), bad, hint)
