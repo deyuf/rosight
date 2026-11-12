@@ -34,12 +34,35 @@ mkdocs serve                      # docs preview
 - `src/rosight/ros/` — anything ROS-aware. `backend.py` is the ONLY module
   that imports `rclpy`; everything else stays import-free of ROS.
 - `src/rosight/widgets/` — one panel per file. Cross-panel calls go via
-  `RosightApp` rather than direct widget references.
+  `RosightApp` rather than direct widget references. Panels that list a
+  kind of graph entity subclass `GraphListPanel` (`_base.py`).
+- Keep rclpy calls off the Textual loop: read `ros.graph_snapshot()` /
+  `Subscription.snapshot()`, and run anything that can block
+  (`call_service`, parameters, goals) via `asyncio.to_thread` in a worker.
+- New keys must be documented in `widgets/help_screen.py` —
+  `tests/test_help_in_sync.py` fails otherwise.
 - `src/rosight/utils/` — pure-Python helpers. Test these first when
   refactoring.
 - `tests/` — pure-python tests must run without rclpy. The
   `tiny_message` fixture in `conftest.py` provides a duck-typed ROS
   message for introspection tests.
+
+## Regenerating the screenshots
+
+The images in `docs/screenshots/` are generated, not hand-made:
+
+```bash
+pip install playwright && playwright install chromium   # once, for PNGs
+python scripts/generate_screenshots.py                  # SVG + PNG
+python scripts/generate_screenshots.py --svg-only       # no browser needed
+```
+
+The script runs the real app headless against an in-process demo backend
+(real `Subscription` objects fed with synthetic rates and nested fake
+messages) and drives each feature — subscribe, plot, service call, action
+goal, parameters, publish form, palette completion. Re-run it whenever the
+layout of a panel changes and commit both formats: the docs site uses the
+SVGs, the README / PyPI page the 1600 px PNGs.
 
 ## Adding a new panel
 

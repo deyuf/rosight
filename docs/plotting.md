@@ -26,7 +26,9 @@ specific numeric *fields* you pick. Three ways:
    3. Use arrow keys / Space to expand sub-messages (`pose` →
       `position` → `x`).
    4. Cursor on a *numeric* leaf (int / float), press **p** — the series
-      is added and the Plot tab opens.
+      is added and **you stay in the tree**, so you can pick several
+      fields in a row (the status bar confirms each one). Press **6** to
+      look at the plot.
       - If the leaf isn't numeric (string, array, etc.) you get a toast:
         `field <path> is not numeric — skipped`.
 
@@ -34,7 +36,15 @@ specific numeric *fields* you pick. Three ways:
    ```text
    :plot /odom twist.twist.linear.x
    ```
-   The plotter auto-subscribes if necessary.
+   The palette completes topic names and plottable field paths (→
+   accepts). The plotter auto-subscribes if necessary and this form does
+   switch to the Plot tab.
+
+Plotted series are part of the saved session: on the next start they are
+restored and the plot keeps retrying the subscription until the topic is
+discovered. The same retry brings data back after `:reconnect` or
+`:domain`. If you unsubscribe a plotted topic on purpose (`x` /
+`:unsub`), it stays unsubscribed until you add a series for it again.
 
 3. **Programmatically**
    ```python

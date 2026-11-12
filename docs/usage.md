@@ -25,21 +25,31 @@ number keys `1`-`9`.
 ### Topics (`1`)
 
 The headline panel. Left: a scrolling list of every topic currently visible
-on the network. Columns: name, type (short form), publisher count,
-subscriber count, hz, bandwidth.
+on the network. Columns: name (● = subscribed), type (short form),
+publisher count, subscriber count, Hz, bandwidth per second, and an Hz
+**trend** sparkline of the last 8 s. `QoS!` in the Hz column means the
+publisher's QoS is incompatible with ours; the detail header names the
+policy.
 
-- `Enter` — subscribe to the highlighted topic. The right pane will fill
-  with a tree view of the latest message.
+- `Enter` — subscribe to the highlighted topic. The right pane fills with a
+  tree view of the latest message and focus moves there.
+- `x` — unsubscribe (frees the bandwidth / CPU of that topic).
 - `i` — show full QoS details for every publisher endpoint.
-- `Space` — pause/resume the live tree refresh.
-- `/` — focus the filter box (substring match against name and type).
-- `r` — request a discovery refresh.
+- `P` — publish once: a YAML form pre-filled from the last received message
+  (or the type's defaults); `ctrl+s` sends, `esc` cancels.
+- `Space` — pause/resume the live tree. While paused, `[` / `]` step to
+  older / newer messages (the last 100, 16 MB at most).
+- `/` — focus the filter box (fuzzy: `odm` matches `/odom`).
+- `r` — rediscover the graph immediately.
 
 In the message tree:
 
-- Arrow keys / `j` / `k` to navigate.
-- `Enter` or `p` on a numeric leaf — adds it to the **Plot** panel and jumps
-  there.
+- Arrow keys / `j` / `k` to navigate; values that changed since the last
+  message flash briefly.
+- `/` — search fields by path; `n` / `N` next / previous match.
+- `y` / `Y` — copy the field path / value to the clipboard.
+- `Enter` or `p` on a numeric leaf — adds it to the **Plot** panel; you stay
+  in the tree to add more.
 - `Enter` on a numeric array container (look for the green `[plot ↵]`
   marker, e.g. `ranges` on a LaserScan) — plots the array as a
   value-vs-index snapshot in the Plot panel.
@@ -54,7 +64,9 @@ Additional Topics-level keys:
 ### Nodes (`2`)
 
 Every running node, with namespace. Highlight one to see its publishers,
-subscribers, service servers/clients, and action endpoints.
+subscribers and service servers/clients as a tree; `Enter` on an entry
+jumps to that topic or service (clearing any filter in the way).
+`:node <name>` selects a node from anywhere.
 
 ### Services (`3`)
 
@@ -114,13 +126,18 @@ Auto-subscribes to `/tf` and `/tf_static` and renders the frame tree. Use
 
 Spawns `ros2 bag record` / `ros2 bag play` as child processes:
 
-- `R` — toggle recording (uses the args from the input box; default `-a`)
-- `p` — play the bag at the path in the second input
+- `R` — toggle recording (uses the args from the input box, parsed like a
+  shell command line; default `-a`). Output goes to `ui.bag_output_dir`,
+  else `ui.export_dir`, else the current directory.
+- `p` — play the bag at the path in the second input (a running playback
+  is stopped first; missing paths are reported instead of launched)
 - `s` — stop both processes
 - `i` — print bag info to the log file
 
-The TUI deliberately wraps the CLI rather than calling `rosbag2_py`
-directly so recordings outlive the TUI process.
+The TUI wraps the `ros2 bag` CLI rather than calling `rosbag2_py`
+directly. Stopping sends `SIGINT` (so rosbag2 writes `metadata.yaml`),
+escalating to `SIGTERM` / `SIGKILL`; children are always stopped when
+Rosight exits, and quitting while recording asks for confirmation first.
 
 ### Interfaces (`9`)
 
@@ -136,11 +153,18 @@ Press `:` to open a single-line command bar (vim-style). Examples:
 :plot /odom twist.twist.linear.x
 :plot-array /scan ranges
 :view /camera/image_raw
-:record /odom /scan
+:node planner_server
+:param /controller_server
+:unsub all
+:domain 3
+:reconnect
 :quit
 ```
 
-Unknown commands surface in the status bar.
+Command names, topic names and plottable field paths are completed as you
+type (→ accepts); `↑` / `↓` walk the history, which is kept across
+restarts. Unknown commands surface in the status bar. See
+[keybindings](keybindings.md#command-palette) for the full list.
 
 ## Status bar
 
