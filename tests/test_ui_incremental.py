@@ -228,3 +228,15 @@ def test_ellipsize_middle_keeps_both_ends():
     assert len(short) == 30 and "…" in short
     assert short.startswith("rcl_interfaces") and short.endswith("Descriptors")
     assert ellipsize_middle("short", 30) == "short"
+
+
+@pytest.mark.asyncio
+async def test_sync_table_shrinks_column_when_cells_get_narrower():
+    async with _TableApp().run_test(size=(60, 20)) as pilot:
+        t = pilot.app.query_one(DataTable)
+        sync_table(t, _rows(("a", "a-very-long-value-indeed"), ("b", "2")))
+        await pilot.pause()
+        wide = t.virtual_size.width
+        sync_table(t, _rows(("a", "short"), ("b", "2")))  # same keys
+        await pilot.pause()
+        assert t.virtual_size.width < wide

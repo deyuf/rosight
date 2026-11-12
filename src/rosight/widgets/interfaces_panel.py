@@ -14,11 +14,10 @@ from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
 from rosight.utils.datatable import (
-    current_row_key,
     ellipsize_middle,
     fit_last_column,
     fit_last_column_when_ready,
-    restore_cursor,
+    sync_table,
     table_width,
 )
 
@@ -117,26 +116,23 @@ class InterfacesPanel(Vertical):
 
     def _render_table(self) -> None:
         t = self.query_one("#iface-table", DataTable)
-        scroll = t.scroll_offset
-        selected_key = current_row_key(t)
-        t.clear()
         ft = self.filter_text.lower().strip()
-        new_idx = -1
         # Real interface names (rcl_interfaces/msg/ParameterDescriptor …)
         # can be wider than the pane: shorten the middle, keeping the
         # package and the type name readable. The row key stays exact.
+        # sync_table re-measures the column, so names rendered while the
+        # tab was hidden (width unknown, not shortened) don't keep it wide.
+        # Reserve the cell padding and the vertical scrollbar (the list is
+        # usually long enough to need one).
         width = table_width(t)
-        for idx, (name, _kind) in enumerate(
-            (n, k) for n, k in self._cache if not ft or ft in n.lower()
-        ):
-            t.add_row(ellipsize_middle(name, width - 2) if width else name, key=name)
-            if name == selected_key:
-                new_idx = idx
-        restore_cursor(t, selected_key, new_idx)
-        try:
-            t.scroll_to(x=scroll.x, y=scroll.y, animate=False)
-        except Exception:
-            pass
+        room = width - 2 - int(t.styles.scrollbar_size_vertical or 0)
+        rows = [
+            (name, (ellipsize_middle(name, room) if width else name,))
+            for name, _kind in self._cache
+            if not ft or ft in name.lower()
+        ]
+        sync_table(t, rows)
+        # Also on resize when no cell changed: the column must follow the pane.
         fit_last_column(t)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:

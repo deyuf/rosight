@@ -112,6 +112,9 @@ def fit_last_column(table: Any) -> None:
         try:
             table._new_rows.update(table.rows)
             table._require_update_dimensions = True
+            # Rendered rows are cached per row, not per column width: drop
+            # them or the rows keep painting at the old width.
+            table._clear_caches()
         except Exception:
             pass
         table.refresh(layout=True)
@@ -154,7 +157,17 @@ def sync_table(table: Any, rows: list[tuple[str, tuple[Any, ...]]]) -> bool:
     except Exception:
         old_keys = []
 
-    if new_keys == old_keys and len(cache) == len(new_keys):
+    # update_cell can widen a column but never narrow it, so a cell that got
+    # narrower (e.g. names shortened once the pane width is known) forces a
+    # rebuild, which re-measures every column.
+    shrinks = any(
+        _cell_width(v) < _cell_width(prev[i])
+        for k, cells in rows
+        if (prev := cache.get(k)) is not None and prev != cells
+        for i, v in enumerate(cells)
+        if i < len(prev)
+    )
+    if new_keys == old_keys and len(cache) == len(new_keys) and not shrinks:
         col_keys = list(table.columns.keys())
         widened = False
         for key, cells in rows:
@@ -190,12 +203,21 @@ def sync_table(table: Any, rows: list[tuple[str, tuple[Any, ...]]]) -> bool:
         if key == selected:
             new_idx = idx
     table._rosight_cells = cache
+    table._rosight_fit_cache = None  # widths changed: let fit_last_column redo its work
     restore_cursor(table, selected, new_idx)
     if scroll is not None:
         try:
             table.scroll_to(x=scroll.x, y=scroll.y, animate=False)
         except Exception:
             pass
+    # Re-evaluate scrollbars too: a table that just got narrower would
+    # otherwise keep showing the horizontal scrollbar from before.
+    # Textual only re-checks scrollbar visibility when the widget's own size
+    # changes, not when its virtual size shrinks.
+    table.refresh(layout=True)
+    refresh_bars = getattr(table, "_refresh_scrollbars", None)
+    if callable(refresh_bars):
+        table.call_after_refresh(refresh_bars)
     return True
 
 

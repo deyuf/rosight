@@ -517,7 +517,6 @@ async def scene_bags(app: RosightApp, pilot: Any, ros: DemoRos) -> None:
 async def scene_interfaces(app: RosightApp, pilot: Any, ros: DemoRos) -> None:
     from rosight.widgets.interfaces_panel import InterfacesPanel
 
-    await show_tab(pilot, "interfaces")
     panel = app.query_one(InterfacesPanel)
     names = {
         n
@@ -532,6 +531,10 @@ async def scene_interfaces(app: RosightApp, pilot: Any, ros: DemoRos) -> None:
         "rosbag2_interfaces/srv/SetRate_Response",
     }
     panel._cache = sorted((n, n.split("/")[1]) for n in names)
+    # Render while the tab is still hidden, like the real discovery at
+    # mount does on a ROS install (it caught a stale column width in CI).
+    panel._render_table()
+    await show_tab(pilot, "interfaces")
     panel._render_table()
     keys = [k for k, _ in panel._cache]
     table = panel.query_one("#iface-table")
