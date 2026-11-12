@@ -351,11 +351,20 @@ class DemoRos:
         pass
 
 
-def _patch_introspection() -> None:
+def _patch_introspection() -> Any:
+    """Point type lookup at the demo types; returns a function that undoes
+    it (this module is also imported by tests, which must not leak fakes
+    into later tests that use real ROS types)."""
+    saved = (introspection.get_message_class, introspection.get_service_class)
     introspection.get_message_class = lambda t: TYPES[t]  # type: ignore[assignment]
     introspection.get_service_class = lambda t: SimpleNamespace(  # type: ignore[assignment]
-        Request=TYPES[t.replace("/srv/", "/srv/") + "_Request"]
+        Request=TYPES[t + "_Request"]
     )
+
+    def restore() -> None:
+        introspection.get_message_class, introspection.get_service_class = saved
+
+    return restore
 
 
 # ---------------------------------------------------------------------------
@@ -510,11 +519,19 @@ async def scene_interfaces(app: RosightApp, pilot: Any, ros: DemoRos) -> None:
 
     await show_tab(pilot, "interfaces")
     panel = app.query_one(InterfacesPanel)
-    panel._cache = sorted(
-        (n, n.split("/")[1])
+    names = {
+        n
         for n in TYPES
         if n.count("/") == 2 and not n.endswith(("_Request", "_Response", "_Feedback"))
-    )
+    }
+    # Real systems have much longer names than the demo types; keep a few so
+    # the layout check sees them (CI's ROS images list hundreds like these).
+    names |= {
+        "composition_interfaces/srv/LoadNode_Response",
+        "rcl_interfaces/msg/ParameterEventDescriptors",
+        "rosbag2_interfaces/srv/SetRate_Response",
+    }
+    panel._cache = sorted((n, n.split("/")[1]) for n in names)
     panel._render_table()
     keys = [k for k, _ in panel._cache]
     table = panel.query_one("#iface-table")
@@ -583,21 +600,24 @@ SCENES = [
 
 async def capture_all(size: tuple[int, int] = SIZE) -> list[Path]:
     OUT.mkdir(parents=True, exist_ok=True)
-    _patch_introspection()
-    ros = DemoRos()
-    ros.feed("/odom", odom, hz=50, size=726)
-    ros.feed("/scan", scan, hz=10, size=1484)
-    ros.feed("/joint_states", joints, hz=100, size=312)
-    ros.feed("/cmd_vel", lambda _t: Twist(), hz=20, size=48)
-    app = RosightApp(ros=RosBackend())
-    async with app.run_test(headless=True, size=size) as pilot:
-        app.ros = ros  # type: ignore[assignment]
-        app.backend_ok = True
-        app._refresh_status()
-        await settle(pilot)
-        for scene in SCENES:
+    restore = _patch_introspection()
+    try:
+        ros = DemoRos()
+        ros.feed("/odom", odom, hz=50, size=726)
+        ros.feed("/scan", scan, hz=10, size=1484)
+        ros.feed("/joint_states", joints, hz=100, size=312)
+        ros.feed("/cmd_vel", lambda _t: Twist(), hz=20, size=48)
+        app = RosightApp(ros=RosBackend())
+        async with app.run_test(headless=True, size=size) as pilot:
+            app.ros = ros  # type: ignore[assignment]
+            app.backend_ok = True
             app._refresh_status()
-            await scene(app, pilot, ros)
+            await settle(pilot)
+            for scene in SCENES:
+                app._refresh_status()
+                await scene(app, pilot, ros)
+    finally:
+        restore()
     return sorted(OUT.glob("*.svg"))
 
 

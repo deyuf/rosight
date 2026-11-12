@@ -44,8 +44,14 @@ async def test_all_views_fit_without_horizontal_scrolling(size, monkeypatch, tmp
                     f"has {w.scrollable_content_region.width}"
                 )
 
+    from rosight.ros import introspection
+
+    originals = (introspection.get_message_class, introspection.get_service_class)
     monkeypatch.setattr(shots, "save", check)
     monkeypatch.setattr(shots, "OUT", tmp_path)
     await shots.capture_all(size)
+    # The demo type lookup must not leak into later tests (it broke the
+    # real-rclpy tests in CI when it did).
+    assert (introspection.get_message_class, introspection.get_service_class) == originals
     assert len(visited) == len(shots.SCENES)
     assert not problems, "\n".join(problems)

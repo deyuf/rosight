@@ -236,3 +236,16 @@ def set_columns(table: Any, columns: tuple[str, ...]) -> bool:
     table._rosight_cells = None
     table._rosight_fit_cache = None
     return True
+
+
+def ellipsize_middle(text: str, width: int) -> str:
+    """Shorten the middle of ``text`` to ``width`` cells ("pkg/…/Type")."""
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width < 5:
+        return ellipsize(text, width)
+    tail = (width - 1) // 2 + (width - 1) % 2
+    head = width - 1 - tail
+    return text[:head] + "…" + text[-tail:]

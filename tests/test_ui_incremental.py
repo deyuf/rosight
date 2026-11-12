@@ -218,3 +218,13 @@ async def test_message_tree_nests_submessages():
             "orientation",
             "ranges",
         ]
+
+
+def test_ellipsize_middle_keeps_both_ends():
+    from rosight.utils.datatable import ellipsize_middle
+
+    name = "rcl_interfaces/msg/ParameterEventDescriptors"
+    short = ellipsize_middle(name, 30)
+    assert len(short) == 30 and "…" in short
+    assert short.startswith("rcl_interfaces") and short.endswith("Descriptors")
+    assert ellipsize_middle("short", 30) == "short"

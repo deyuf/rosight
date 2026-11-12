@@ -15,9 +15,11 @@ from textual.widgets import DataTable, Input, Static
 
 from rosight.utils.datatable import (
     current_row_key,
+    ellipsize_middle,
     fit_last_column,
     fit_last_column_when_ready,
     restore_cursor,
+    table_width,
 )
 
 if TYPE_CHECKING:
@@ -64,6 +66,7 @@ class InterfacesPanel(Vertical):
         self._render_table()
 
     def on_resize(self) -> None:
+        self.call_after_refresh(self._render_table)
         fit_last_column_when_ready(self.query_one("#iface-table", DataTable))
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -119,10 +122,14 @@ class InterfacesPanel(Vertical):
         t.clear()
         ft = self.filter_text.lower().strip()
         new_idx = -1
+        # Real interface names (rcl_interfaces/msg/ParameterDescriptor …)
+        # can be wider than the pane: shorten the middle, keeping the
+        # package and the type name readable. The row key stays exact.
+        width = table_width(t)
         for idx, (name, _kind) in enumerate(
             (n, k) for n, k in self._cache if not ft or ft in n.lower()
         ):
-            t.add_row(name, key=name)
+            t.add_row(ellipsize_middle(name, width - 2) if width else name, key=name)
             if name == selected_key:
                 new_idx = idx
         restore_cursor(t, selected_key, new_idx)
