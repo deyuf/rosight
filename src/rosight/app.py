@@ -268,6 +268,30 @@ class RosightApp(App[int]):
         except Exception:
             log.exception("could not add plot snapshot series")
 
+    # ----- cross-panel navigation (used by the Nodes endpoint tree) -----
+
+    def goto_topic(self, topic: str) -> None:
+        self.action_tab("topics")
+        # Tab switch lays the panel out on the next refresh.
+        self.call_after_refresh(self._goto, TopicsPanel, "focus_topic", topic)
+
+    def goto_service(self, name: str) -> None:
+        self.action_tab("services")
+        self.call_after_refresh(self._goto, ServicesPanel, "focus_item", name)
+
+    def goto_action(self, name: str) -> None:
+        self.action_tab("actions")
+        self.call_after_refresh(self._goto, ActionsPanel, "focus_item", name)
+
+    def _goto(self, panel_cls: type, method: str, key: str) -> None:
+        try:
+            found = getattr(self.query_one(panel_cls), method)(key)
+        except Exception:
+            log.debug("goto %s failed", key, exc_info=True)
+            found = False
+        if not found:
+            self.push_status(f"{key} is not in the list (not discovered yet?)")
+
     def export_path(self, filename: str) -> Path:
         """Absolute path for an exported file, honouring ``ui.export_dir``.
 

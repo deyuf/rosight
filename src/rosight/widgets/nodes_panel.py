@@ -8,7 +8,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import DataTable, Input, Static, Tree
 
 from rosight.utils.formatting import short_type
 from rosight.widgets._base import GraphListPanel
@@ -45,7 +45,9 @@ class NodesPanel(GraphListPanel):
             yield DataTable(id=self.TABLE_ID, cursor_type="row", zebra_stripes=True)
         with Vertical(id="right"):
             yield Static("Select a node", id="node-header")
-            yield Static("", id="node-detail")
+            tree: Tree[tuple[str, str]] = Tree("endpoints", id="node-detail")
+            tree.show_root = False
+            yield tree
 
     def _row_key(self, item: Any) -> str:
         return str(item.fqn)
@@ -59,24 +61,49 @@ class NodesPanel(GraphListPanel):
     def _on_selected(self) -> None:
         self.action_info()
 
+    # Section label, and where enter on one of its entries takes you.
+    _SECTIONS = {
+        "publishers": ("Publishers", "topic"),
+        "subscribers": ("Subscribers", "topic"),
+        "service_servers": ("Service servers", "service"),
+        "service_clients": ("Service clients", "service"),
+        "action_servers": ("Action servers", "action"),
+        "action_clients": ("Action clients", "action"),
+    }
+
     def action_info(self) -> None:
         node = self.selected
         ros = self.ros
         if not node or ros is None:
             return
+        header = self.query_one("#node-header", Static)
+        tree = self.query_one("#node-detail", Tree)
+        tree.clear()
         try:
             info = ros.node_info(node)
         except Exception as e:
-            self.query_one("#node-detail", Static).update(Text(f"error: {e}", style="red"))
+            header.update(Text(f"{node}\nerror: {e}", style="red"))
             return
-        self.query_one("#node-header", Static).update(Text(node, style="bold cyan"))
-        text = Text()
-        for label, items in info.items():
-            text.append(f"\n{label} ({len(items)})\n", style="bold yellow")
+        header.update(
+            Text.assemble((f"{node}\n", "bold cyan"), ("enter on an entry: jump to it", "dim"))
+        )
+        for key, items in info.items():
+            title, kind = self._SECTIONS.get(key, (key, ""))
+            section = tree.root.add(
+                Text.assemble((title, "bold yellow"), (f"  ({len(items)})", "dim")),
+                expand=bool(items),
+            )
             for name, types in items:
-                text.append(f"  {name}", style="white")
+                label = Text(name)
                 if types:
-                    text.append(f"  [{short_type(types[0])}]\n", style="dim")
-                else:
-                    text.append("\n")
-        self.query_one("#node-detail", Static).update(text)
+                    label.append(f"  [{short_type(types[0])}]", style="dim")
+                section.add_leaf(label, data=(kind, name))
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        data = event.node.data
+        if not data:
+            return
+        kind, name = data
+        goto = getattr(self.app, f"goto_{kind}", None)
+        if callable(goto):
+            goto(name)

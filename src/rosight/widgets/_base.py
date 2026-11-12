@@ -171,6 +171,26 @@ class GraphListPanel(Vertical):
         if sync_table(table, rows):
             fit_last_column(table)
 
+    def focus_item(self, key: str) -> bool:
+        """Clear the filter, put the cursor on ``key`` and focus the table.
+
+        Returns False when the item isn't in the (unfiltered) list yet.
+        """
+        self.filter_text = ""
+        try:
+            self.query_one("#filter", Input).value = ""
+        except Exception:
+            pass
+        self._refresh(force=True)
+        self._render_table()
+        table = self._table()
+        keys = [str(r.key.value) for r in table.ordered_rows]
+        if key not in keys:
+            return False
+        table.move_cursor(row=keys.index(key), animate=False)
+        table.focus()
+        return True
+
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.data_table.id != self.TABLE_ID or event.row_key is None:
             return

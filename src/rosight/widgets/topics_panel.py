@@ -227,6 +227,21 @@ class TopicsPanel(Vertical):
         if sync_table(table, rows):
             fit_last_column(table)
 
+    def focus_topic(self, topic: str) -> bool:
+        """Clear the filter, move the cursor to ``topic`` and focus the table."""
+        self.filter_text = ""
+        self.query_one("#filter", Input).value = ""
+        self._refresh_table()
+        self._render_table()
+        table = self.query_one("#topics-table", DataTable)
+        keys = [str(r.key.value) for r in table.ordered_rows]
+        if topic not in keys:
+            return False
+        table.move_cursor(row=keys.index(topic), animate=False)
+        self.selected_topic = topic
+        table.focus()
+        return True
+
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is None or str(event.row_key.value) == PLACEHOLDER_KEY:
             return
