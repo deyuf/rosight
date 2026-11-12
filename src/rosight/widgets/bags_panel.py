@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
+import os
 import shlex
+import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -21,6 +24,102 @@ if TYPE_CHECKING:
     from rosight.app import RosightApp
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Child-process lifecycle
+#
+# Children are started with ``start_new_session=True`` (see _CHILD_KW), so
+# they are NOT in the terminal's foreground process group: closing the TUI,
+# Ctrl+C, or a crash does not reach them, and a recorder would keep writing
+# to disk after rosight exited. Every child is tracked here and stopped on
+# panel unmount and, as a last resort, at interpreter exit.
+# ---------------------------------------------------------------------------
+
+_LIVE: dict[int, Any] = {}
+# Bound at import so isinstance() keeps working even if ``subprocess.Popen``
+# is later replaced (tests monkeypatch it; so do some debuggers).
+_POPEN_CLS = subprocess.Popen
+
+
+def _track(proc: Any) -> Any:
+    _LIVE[id(proc)] = proc
+    return proc
+
+
+def _is_running(proc: Any) -> bool:
+    try:
+        return proc is not None and proc.poll() is None
+    except Exception:
+        return False
+
+
+def _signal(proc: Any, sig: int) -> None:
+    """Send ``sig`` to the child's whole process group when possible.
+
+    ``ros2 bag`` may fork helpers, so the group is the right target. Only
+    real ``Popen`` objects get ``killpg`` — anything else (test doubles)
+    goes through its own ``send_signal``/``terminate``.
+    """
+    try:
+        if isinstance(proc, _POPEN_CLS) and hasattr(os, "killpg"):
+            try:
+                os.killpg(proc.pid, sig)
+                return
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        send = getattr(proc, "send_signal", None)
+        if callable(send):
+            send(sig)
+        else:
+            proc.terminate()
+    except Exception:
+        log.debug("signal %s to child failed", sig, exc_info=True)
+
+
+def request_stop(proc: Any) -> None:
+    """Ask a child to stop gracefully without blocking the UI.
+
+    SIGINT is what ``ros2 bag record`` handles to flush and write
+    ``metadata.yaml``; SIGTERM can leave an unreadable bag on some distros.
+    """
+    if _is_running(proc):
+        _signal(proc, signal.SIGINT)
+
+
+def stop_process(proc: Any, timeout: float = 5.0) -> None:
+    """Stop a child, escalating SIGINT → SIGTERM → SIGKILL. Blocks up to
+    roughly ``timeout + 3`` seconds; never raises."""
+    if proc is None:
+        return
+    try:
+        for sig, wait_s in (
+            (signal.SIGINT, timeout),
+            (signal.SIGTERM, 2.0),
+            (signal.SIGKILL, 1.0),
+        ):
+            if not _is_running(proc):
+                break
+            _signal(proc, sig)
+            wait = getattr(proc, "wait", None)
+            if not callable(wait):
+                break
+            try:
+                wait(timeout=wait_s)
+            except subprocess.TimeoutExpired:
+                continue
+    except Exception:
+        log.debug("stop_process failed", exc_info=True)
+    finally:
+        _LIVE.pop(id(proc), None)
+
+
+def stop_all_children(timeout: float = 5.0) -> None:
+    for proc in list(_LIVE.values()):
+        stop_process(proc, timeout)
+
+
+atexit.register(stop_all_children)
 
 
 class BagsPanel(Vertical):
@@ -81,6 +180,13 @@ class BagsPanel(Vertical):
     def on_resize(self) -> None:
         fit_last_column_when_ready(self.query_one("#procs", DataTable))
 
+    def on_unmount(self) -> None:
+        # The app is closing (or the panel is being removed): make sure no
+        # recorder/player outlives us. Blocking here is fine — it's bounded
+        # and lets rosbag2 finalize the bag.
+        for proc in (self._record_proc, self._play_proc):
+            stop_process(proc)
+
     @property
     def app_(self) -> RosightApp:
         return self.app  # type: ignore[return-value]
@@ -95,7 +201,7 @@ class BagsPanel(Vertical):
     # showed up as random characters in the record-args box. `start_new_session`
     # additionally detaches the child from our controlling terminal so SIGINT
     # / window-size changes don't propagate to it.
-    _CHILD_KW = {
+    _CHILD_KW: ClassVar[dict[str, Any]] = {
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,
         "stderr": subprocess.DEVNULL,
@@ -103,8 +209,8 @@ class BagsPanel(Vertical):
     }
 
     def action_toggle_record(self) -> None:
-        if self._record_proc and self._record_proc.poll() is None:
-            self._record_proc.terminate()
+        if _is_running(self._record_proc):
+            request_stop(self._record_proc)
             self._set_recording(False)
             self.app_.notify("recording stopped", title="Bag")
             return
@@ -125,7 +231,7 @@ class BagsPanel(Vertical):
             return
         cmd = ["ros2", "bag", "record", "-o", str(out_dir), *args]
         try:
-            self._record_proc = subprocess.Popen(cmd, **self._CHILD_KW)
+            self._record_proc = _track(subprocess.Popen(cmd, **self._CHILD_KW))
             self._set_recording(True)
             self.app_.notify(
                 f"recording to {out_dir.name}\npress R or s to stop",
@@ -147,9 +253,13 @@ class BagsPanel(Vertical):
         if not bag_path.exists():
             self.app_.notify(f"bag not found: {bag_path}", severity="warning", title="Bag")
             return
+        if _is_running(self._play_proc):
+            # Only one playback at a time; the previous one would otherwise
+            # be orphaned and keep publishing in the background.
+            request_stop(self._play_proc)
         try:
-            self._play_proc = subprocess.Popen(
-                ["ros2", "bag", "play", str(bag_path)], **self._CHILD_KW
+            self._play_proc = _track(
+                subprocess.Popen(["ros2", "bag", "play", str(bag_path)], **self._CHILD_KW)
             )
             self.app_.notify(f"playing {bag_path.name}", title="Bag")
         except FileNotFoundError:
@@ -172,8 +282,8 @@ class BagsPanel(Vertical):
     def action_stop(self) -> None:
         stopped = False
         for proc in (self._record_proc, self._play_proc):
-            if proc and proc.poll() is None:
-                proc.terminate()
+            if _is_running(proc):
+                request_stop(proc)
                 stopped = True
         if stopped:
             self._set_recording(False)
@@ -222,7 +332,9 @@ class BagsPanel(Vertical):
         for label, proc in (("record", self._record_proc), ("play", self._play_proc)):
             if proc is None:
                 continue
-            alive = proc.poll() is None
+            alive = _is_running(proc)
+            if not alive:
+                _LIVE.pop(id(proc), None)
             if label == "record" and alive:
                 recording = True
             state = "running" if alive else f"exit {proc.returncode}"
