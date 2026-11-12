@@ -864,13 +864,13 @@ class RosBackend:
         return out
 
     def set_parameter(
-        self, target_node: str, name: str, value: Any
+        self, target_node: str, name: str, value: Any, type_hint: str | None = None
     ) -> bool:  # pragma: no cover — needs ROS network
         from rcl_interfaces.msg import Parameter
         from rcl_interfaces.msg import ParameterValue as PV
         from rcl_interfaces.srv import SetParameters
 
-        pv = _build_param_value(PV(), value)
+        pv = _build_param_value(PV(), value, type_hint)
         req = SetParameters.Request()
         param = Parameter()
         param.name = name
@@ -882,6 +882,90 @@ class RosBackend:
             req,
         )
         return all(r.successful for r in resp.results)
+
+    # ----- actions --------------------------------------------------------
+
+    def run_action_goal(
+        self,
+        action: str,
+        type_name: str,
+        goal: Any,
+        *,
+        on_feedback: Callable[[Any], None] | None = None,
+        on_accepted: Callable[[], None] | None = None,
+        cancel: threading.Event | None = None,
+        server_timeout: float = 5.0,
+        result_timeout: float | None = None,
+    ) -> tuple[int, Any]:
+        """Send an action goal and block until it finishes.
+
+        Meant for a worker thread. ``on_feedback`` is called (on the
+        executor thread) with each feedback message; setting ``cancel``
+        requests cancellation and keeps waiting for the server's final
+        result. Returns ``(status, result)`` where status is the
+        action_msgs/GoalStatus code (4 succeeded, 5 canceled, 6 aborted).
+        """
+        from rclpy.action import ActionClient  # type: ignore
+
+        from rosight.ros.introspection import get_action_class
+
+        node = self._require_node()
+        action_cls = get_action_class(type_name)
+        client = ActionClient(node, action_cls, action)
+        try:
+            if not client.wait_for_server(timeout_sec=server_timeout):
+                raise TimeoutError(f"action server {action!r} unavailable")
+
+            def _feedback(fb_msg: Any) -> None:
+                if on_feedback is not None:
+                    on_feedback(getattr(fb_msg, "feedback", fb_msg))
+
+            goal_handle = _wait_future(
+                client.send_goal_async(goal, feedback_callback=_feedback),
+                server_timeout,
+                f"goal to {action!r} was not acknowledged",
+            )
+            if not getattr(goal_handle, "accepted", False):
+                raise RuntimeError(f"goal rejected by {action!r}")
+            if on_accepted is not None:
+                on_accepted()
+            result_future = goal_handle.get_result_async()
+            done = threading.Event()
+            result_future.add_done_callback(lambda _f: done.set())
+            deadline = None if result_timeout is None else time.monotonic() + result_timeout
+            cancel_sent = False
+            while not done.wait(0.1):
+                if cancel is not None and cancel.is_set() and not cancel_sent:
+                    goal_handle.cancel_goal_async()
+                    cancel_sent = True
+                if deadline is not None and time.monotonic() > deadline:
+                    raise TimeoutError(f"action {action!r} did not finish in time")
+            wrapped = result_future.result()
+            return int(getattr(wrapped, "status", 0)), getattr(wrapped, "result", wrapped)
+        finally:
+            try:
+                client.destroy()
+            except Exception:
+                pass
+
+
+def _wait_future(future: Any, timeout: float, what: str) -> Any:
+    done = threading.Event()
+    future.add_done_callback(lambda _f: done.set())
+    if not done.wait(timeout):
+        raise TimeoutError(what)
+    return future.result()
+
+
+GOAL_STATUS = {
+    0: "unknown",
+    1: "accepted",
+    2: "executing",
+    3: "canceling",
+    4: "succeeded",
+    5: "canceled",
+    6: "aborted",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -931,14 +1015,90 @@ def _param_value(v: Any) -> Any:
     return None
 
 
-def _build_param_value(pv: Any, value: Any) -> Any:
-    """Populate an rcl_interfaces ParameterValue from a Python scalar.
+_ARRAY_KINDS: dict[str, tuple[int, str]] = {
+    "byte_array": (5, "byte_array_value"),
+    "bool_array": (6, "bool_array_value"),
+    "integer_array": (7, "integer_array_value"),
+    "double_array": (8, "double_array_value"),
+    "string_array": (9, "string_array_value"),
+}
 
-    Only scalars are accepted today (bool/int/float/str); arrays would
-    need an explicit element-type hint to disambiguate (``[1, 2]`` could
-    be int or byte array). Order matters: ``bool`` must precede ``int``
-    because ``isinstance(True, int)`` is True.
+
+# A parameter keeps its declared type: typing "abc" into a double parameter
+# should be a form error, not a silent switch to a string parameter.
+_SCALAR_HINTS: dict[str, Callable[[Any], bool]] = {
+    "bool": lambda v: isinstance(v, bool),
+    "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+    "double": lambda v: isinstance(v, float),
+    "string": lambda v: isinstance(v, str),
+}
+
+
+def _infer_array_kind(values: list[Any]) -> str | None:
+    if not values:
+        return None
+    if all(isinstance(v, bool) for v in values):
+        return "bool_array"
+    if all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+        return "integer_array"
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
+        return "double_array"
+    if all(isinstance(v, str) for v in values):
+        return "string_array"
+    return None
+
+
+def _coerce_array(kind: str, values: list[Any]) -> list[Any]:
+    def bad(v: Any) -> TypeError:
+        return TypeError(f"{kind}: element {v!r} has the wrong type")
+
+    out: list[Any] = []
+    for v in values:
+        if kind == "bool_array":
+            if not isinstance(v, bool):
+                raise bad(v)
+            out.append(v)
+        elif kind == "integer_array":
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise bad(v)
+            out.append(v)
+        elif kind == "double_array":
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                raise bad(v)
+            out.append(float(v))
+        elif kind == "string_array":
+            if not isinstance(v, str):
+                raise bad(v)
+            out.append(v)
+        else:  # byte_array: ints 0..255 → 1-byte bytes, as rclpy expects
+            if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 255:
+                raise bad(v)
+            out.append(bytes([v]))
+    return out
+
+
+def _build_param_value(pv: Any, value: Any, type_hint: str | None = None) -> Any:
+    """Populate an rcl_interfaces ParameterValue from a Python value.
+
+    ``type_hint`` is the parameter's current type name (from
+    :func:`_param_type_name`). It keeps a ``double`` parameter a double when
+    the user types ``1``, and lets an empty list keep its array type. Order
+    matters for scalars: ``bool`` must precede ``int`` because
+    ``isinstance(True, int)`` is True.
     """
+    if isinstance(value, list):
+        kind = type_hint if type_hint in _ARRAY_KINDS else _infer_array_kind(value)
+        if kind is None:
+            raise TypeError("cannot infer the element type of this list (empty or mixed types)")
+        type_id, attr = _ARRAY_KINDS[kind]
+        pv.type = type_id
+        setattr(pv, attr, _coerce_array(kind, value))
+        return pv
+    if type_hint == "double" and isinstance(value, int) and not isinstance(value, bool):
+        value = float(value)
+    expected = _SCALAR_HINTS.get(type_hint or "")
+    if expected is not None and not expected(value):
+        raise TypeError(f"expected a {type_hint} value, got {value!r}")
     # (predicate, type_id, attr)
     rules: tuple[tuple[Callable[[Any], bool], int, str], ...] = (
         (lambda x: isinstance(x, bool), 1, "bool_value"),

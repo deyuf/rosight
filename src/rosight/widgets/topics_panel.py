@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import deque
 from typing import TYPE_CHECKING
@@ -104,7 +105,9 @@ class TopicsPanel(Vertical):
         with Vertical(id="right"):
             yield Static("select a topic", id="detail-header")
             yield Static("", id="info-area")
-            yield Input(placeholder="search fields…  enter: find · n/N: next/prev", id="tree-search")
+            yield Input(
+                placeholder="search fields…  enter: find · n/N: next/prev", id="tree-search"
+            )
             yield MessageTree(id="msg-tree")
 
     def on_mount(self) -> None:
@@ -380,11 +383,69 @@ class TopicsPanel(Vertical):
         self._render_table()
         self._refresh_detail()
 
-    def action_publish(self) -> None:  # pragma: no cover — interactive
-        self.app_.notify(
-            "publish form not yet implemented in this build",
-            severity="warning",
+    def action_publish(self) -> None:
+        """Open a YAML form for the selected topic and publish it once.
+
+        Pre-filled with the last received message when subscribed, else the
+        type's default values.
+        """
+        from rosight.ros.introspection import get_message_class
+        from rosight.ros.yaml_msg import MessageYamlError, message_to_yaml, yaml_to_message
+        from rosight.widgets.yaml_form import YamlFormScreen
+
+        topic = self.selected_topic
+        ros = self.ros
+        if not topic:
+            self.app_.push_status("select a topic to publish to")
+            return
+        if ros is None or not ros.started:
+            self.app_.notify("cannot publish: ROS backend not running", severity="warning")
+            return
+        ti = next((t for t in self._topic_cache if t.name == topic), None)
+        if ti is None or not ti.types:
+            self.app_.notify(f"no type for {topic!r}", severity="warning")
+            return
+        type_name = ti.primary_type
+        try:
+            msg_cls = get_message_class(type_name)
+        except Exception as e:
+            self.app_.notify(f"cannot load {type_name}: {e}", severity="error")
+            return
+        sub = ros.get_subscription(topic)
+        template = sub.snapshot()[0] if sub is not None else None
+        text = message_to_yaml(template if template is not None else msg_cls())
+
+        def validate(t: str) -> str | None:
+            try:
+                yaml_to_message(t, msg_cls)
+            except MessageYamlError as e:
+                return str(e)
+            return None
+
+        def done(t: str | None) -> None:
+            if t is not None:
+                msg = yaml_to_message(t, msg_cls)
+                self.run_worker(self._publish(topic, type_name, msg), group="publish")
+
+        self.app_.push_screen(
+            YamlFormScreen(
+                f"Publish to {topic}  [{short_type(type_name)}]",
+                text,
+                hint="published once",
+                submit_label="Publish",
+                validate=validate,
+            ),
+            done,
         )
+
+    async def _publish(self, topic: str, type_name: str, msg: object) -> None:
+        try:
+            await asyncio.to_thread(self.ros.publish_once, topic, type_name, msg)
+        except Exception as e:
+            log.exception("publish failed")
+            self.app_.notify(f"publish failed: {e}", severity="error")
+            return
+        self.app_.notify(f"published to {topic}", title="Publish")
 
     def action_view_image(self) -> None:
         """Open a modal image preview if the selected topic is an image type."""

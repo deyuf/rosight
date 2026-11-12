@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from rich.text import Text
@@ -12,7 +14,12 @@ from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Input, Static
 
-from rosight.utils.datatable import fit_last_column, fit_last_column_when_ready, sync_table
+from rosight.utils.datatable import (
+    current_row_key,
+    fit_last_column,
+    fit_last_column_when_ready,
+    sync_table,
+)
 from rosight.utils.formatting import format_value
 from rosight.utils.fuzzy import matches
 from rosight.widgets._base import (
@@ -24,7 +31,7 @@ from rosight.widgets._base import (
 
 if TYPE_CHECKING:
     from rosight.app import RosightApp
-    from rosight.ros.backend import RosBackend
+    from rosight.ros.backend import ParameterValue, RosBackend
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +39,9 @@ log = logging.getLogger(__name__)
 class ParamsPanel(Vertical):
     BINDINGS = [
         Binding("enter", "load", "Load params"),
-        Binding("g", "get", "Get"),
+        Binding("g", "get", "Reload"),
+        Binding("s", "set", "Set value"),
+        Binding("y", "yank", "Copy YAML"),
         Binding("/", "filter", "Filter"),
     ]
 
@@ -51,6 +60,8 @@ class ParamsPanel(Vertical):
 
     def __init__(self) -> None:
         super().__init__()
+        self._params: dict[str, ParameterValue] = {}
+        self._params_node: str | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="left"):
@@ -118,25 +129,118 @@ class ParamsPanel(Vertical):
         if key != PLACEHOLDER_KEY:
             self.selected_node = key
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        # DataTable consumes `enter` itself, so the panel-level binding never
+        # fires; translate the table's RowSelected into the intended action.
+        if event.row_key is None or str(event.row_key.value) == PLACEHOLDER_KEY:
+            return
+        if event.data_table.id == "nodes-table":
+            self.selected_node = str(event.row_key.value)
+            self.action_load()
+        elif event.data_table.id == "params-table":
+            self.action_set()
+
     def action_load(self) -> None:
         node = self.selected_node
         ros = self.ros
-        if not node or ros is None:
+        if not node or ros is None or not ros.started:
             return
         self.app_.push_status(f"loading params for {node}…")
-        try:
+        self.run_worker(self._load(node), group="params-load", exclusive=True)
+
+    async def _load(self, node: str) -> None:
+        ros = self.ros
+
+        def fetch() -> list:
             names = ros.list_parameters(node)
-            params = ros.get_parameters(node, names) if names else []
+            return ros.get_parameters(node, names) if names else []
+
+        try:
+            # Two service round-trips (up to seconds each): keep them off the
+            # UI loop.
+            params = await asyncio.to_thread(fetch)
         except Exception as e:
             self.app_.push_status(f"param load failed: {e}")
             return
+        self._params = {p.name: p for p in params}
+        self._params_node = node
         self.query_one("#param-header", Static).update(
-            Text(f"{node} ({len(params)} parameters)", style="bold cyan")
+            Text(f"{node} ({len(params)} parameters) · s: set · y: copy YAML", style="bold cyan")
         )
         pt = self.query_one("#params-table", DataTable)
-        pt.clear()
-        for p in params:
-            pt.add_row(p.name, p.type_name, format_value(p.value), key=p.name)
+        rows = [(p.name, (p.name, p.type_name, format_value(p.value))) for p in params]
+        if sync_table(pt, rows):
+            fit_last_column(pt)
+        self.app_.push_status(f"{len(params)} parameters loaded from {node}")
+
+    def _selected_param(self):
+        pt = self.query_one("#params-table", DataTable)
+        key = current_row_key(pt)
+        return self._params.get(key) if key else None
+
+    def action_set(self) -> None:
+        import yaml
+
+        from rosight.ros.backend import _build_param_value
+        from rosight.ros.yaml_msg import MessageYamlError, parse_yaml
+        from rosight.widgets.yaml_form import YamlFormScreen
+
+        param = self._selected_param()
+        node = self._params_node
+        if param is None or node is None:
+            self.app_.notify("load a node's parameters and pick one first", severity="warning")
+            return
+        text = yaml.safe_dump(param.value, default_flow_style=True).removesuffix("...\n").strip()
+
+        def check(t: str) -> str | None:
+            try:
+                _build_param_value(SimpleNamespace(), parse_yaml(t), param.type_name)
+            except (MessageYamlError, TypeError) as e:
+                return str(e)
+            return None
+
+        def done(t: str | None) -> None:
+            if t is not None:
+                value = parse_yaml(t)
+                self.run_worker(self._set(node, param.name, value, param.type_name))
+
+        self.app_.push_screen(
+            YamlFormScreen(
+                f"Set {node} {param.name}  [{param.type_name}]",
+                text,
+                hint="YAML value, e.g. 1.5, true, 'text', [1, 2]",
+                submit_label="Set",
+                validate=check,
+            ),
+            done,
+        )
+
+    async def _set(self, node: str, name: str, value: object, type_name: str) -> None:
+        try:
+            ok = await asyncio.to_thread(self.ros.set_parameter, node, name, value, type_name)
+        except Exception as e:
+            self.app_.notify(f"set {name} failed: {e}", severity="error")
+            return
+        if not ok:
+            self.app_.notify(f"{node} rejected {name} = {value!r}", severity="warning")
+            return
+        self.app_.push_status(f"{name} = {value!r}")
+        await self._load(node)
+
+    def action_yank(self) -> None:
+        """Copy the loaded parameters as a ROS 2 params file."""
+        import yaml
+
+        if not self._params or self._params_node is None:
+            self.app_.notify("load a node's parameters first", severity="warning")
+            return
+        doc = {
+            self._params_node: {
+                "ros__parameters": {n: p.value for n, p in sorted(self._params.items())}
+            }
+        }
+        self.app.copy_to_clipboard(yaml.safe_dump(doc, sort_keys=False))
+        self.app_.notify(f"copied {len(self._params)} parameters as YAML", timeout=2)
 
     def action_get(self) -> None:
         self.action_load()

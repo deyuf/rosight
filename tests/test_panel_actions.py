@@ -132,7 +132,9 @@ async def test_services_action_call_notifies_with_selected_service():
 
         body = " ".join(str(a[0]) for a, _ in notes)
         assert "/add_two_ints" in body
-        assert "not yet implemented" in body
+        # The call form is implemented now; without a backend it explains why
+        # it can't call instead of silently doing nothing.
+        assert "ROS backend not running" in body
 
 
 @pytest.mark.asyncio
