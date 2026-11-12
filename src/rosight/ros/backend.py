@@ -20,10 +20,11 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from rosight.ros import qos as qos_mod
+from rosight.ros.discovery import EMPTY_SNAPSHOT, GraphMonitor, GraphSnapshot, next_snapshot
 from rosight.ros.qos import QoSSpec
 from rosight.ros.stats import BandwidthMonitor, RateMonitor, estimate_msg_size
 
@@ -104,30 +105,159 @@ class ParameterValue:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+# Re-estimate the serialized size of *decoded* messages at most this often.
+# Only used when raw subscriptions are unavailable; raw mode measures
+# ``len(bytes)`` for free on every message.
+_SIZE_ESTIMATE_PERIOD = 1.0
+
+
 class Subscription:
     """Live subscription state shared between the rclpy executor and UI.
 
-    The rclpy callback runs on an executor worker thread; widgets read
-    state from Textual's event loop. ``_lock`` serializes the few moments
-    where both sides touch the same list/fields:
+    Two ingestion modes:
 
-    * the executor appends to ``last_msg`` and iterates ``callbacks``;
-    * widgets add/remove callbacks and snapshot ``last_msg`` + ``last_msg_ts``.
+    * **raw** (preferred, ``decode`` is set): rclpy hands us the serialized
+      CDR ``bytes``. The executor thread only records the bytes, ticks the
+      rate monitor and adds ``len(bytes)`` to the bandwidth monitor — no
+      deserialization at all. The UI decodes lazily in :meth:`snapshot`,
+      at most once per received message and only as often as it renders
+      (4-15 Hz), regardless of how fast the topic publishes.
+    * **decoded** (fallback): rclpy hands us message objects. Size is
+      estimated by re-serializing, throttled to once per second.
 
-    Access ``last_msg`` directly only when you don't need the timestamp
-    to match the message; otherwise prefer :meth:`snapshot`.
+    ``_lock`` guards the latest-message fields and the callback list; the
+    executor never calls user code while holding it.
     """
 
-    topic: str
-    type_name: str
-    rate: RateMonitor = field(default_factory=RateMonitor)
-    bandwidth: BandwidthMonitor = field(default_factory=BandwidthMonitor)
-    last_msg: Any = None
-    last_msg_ts: float = 0.0
-    callbacks: list[Callable[[Any], None]] = field(default_factory=list)
-    _handle: Any = None  # rclpy Subscription
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    def __init__(
+        self,
+        topic: str,
+        type_name: str,
+        *,
+        decode: Callable[[bytes], Any] | None = None,
+    ) -> None:
+        self.topic = topic
+        self.type_name = type_name
+        self.rate = RateMonitor()
+        self.bandwidth = BandwidthMonitor()
+        self.callbacks: list[Callable[[Any], None]] = []
+        self._handle: Any = None  # rclpy Subscription
+        self._lock = threading.Lock()
+        self._decode = decode
+        self._raw: bytes | None = None
+        self._msg: Any = None
+        self._ts = 0.0
+        self._decoded_ts = 0.0
+        self._size_est = 0
+        self._size_est_ts = -1e9
+        self.decode_errors = 0
+        # Last incompatible-QoS report from rclpy, e.g. "RELIABILITY".
+        self.qos_incompatible: str | None = None
+        self.qos_incompatible_count = 0
+
+    def __repr__(self) -> str:
+        mode = "raw" if self.raw_mode else "decoded"
+        return f"Subscription({self.topic!r}, {self.type_name!r}, {mode})"
+
+    @property
+    def raw_mode(self) -> bool:
+        return self._decode is not None
+
+    # ----- executor side ---------------------------------------------------
+
+    def ingest_raw(self, data: bytes) -> None:
+        """rclpy callback for ``raw=True`` subscriptions (executor thread)."""
+        ts = time.monotonic()
+        self.rate.tick(ts)
+        self.bandwidth.tick(len(data), ts)
+        with self._lock:
+            self._raw = data
+            self._ts = ts
+            cbs = list(self.callbacks)
+        if cbs:
+            # Callbacks want message objects, so pay for one decode here —
+            # and cache it so snapshot() doesn't decode the same bytes again.
+            msg, _ = self.snapshot()
+            self._dispatch(cbs, msg)
+
+    def ingest_msg(self, msg: Any) -> None:
+        """rclpy callback for decoded subscriptions (executor thread)."""
+        ts = time.monotonic()
+        self.rate.tick(ts)
+        if ts - self._size_est_ts >= _SIZE_ESTIMATE_PERIOD:
+            self._size_est = estimate_msg_size(msg)
+            self._size_est_ts = ts
+        self.bandwidth.tick(self._size_est, ts)
+        self._set_latest(msg, ts)
+        with self._lock:
+            cbs = list(self.callbacks)
+        if cbs:
+            self._dispatch(cbs, msg)
+
+    def _set_latest(self, msg: Any, ts: float) -> None:
+        with self._lock:
+            self._raw = None
+            self._msg = msg
+            self._ts = ts
+            self._decoded_ts = ts
+
+    @staticmethod
+    def _dispatch(cbs: list[Callable[[Any], None]], msg: Any) -> None:
+        for cb in cbs:
+            try:
+                cb(msg)
+            except Exception:
+                log.exception("subscriber callback raised")
+
+    def on_incompatible_qos(self, info: Any) -> None:
+        """rclpy ``incompatible_qos`` event handler (executor thread)."""
+        policy = getattr(info, "last_policy_kind", None)
+        name = getattr(policy, "name", None) or (str(policy) if policy is not None else "UNKNOWN")
+        self.qos_incompatible = name.replace("RMW_QOS_POLICY_", "")
+        self.qos_incompatible_count = int(
+            getattr(info, "total_count", self.qos_incompatible_count + 1)
+        )
+        log.warning(
+            "incompatible QoS on %s: %s (%d)",
+            self.topic,
+            self.qos_incompatible,
+            self.qos_incompatible_count,
+        )
+
+    # ----- UI side ----------------------------------------------------------
+
+    def snapshot(self) -> tuple[Any, float]:
+        """Return ``(message, receive_ts)`` for the most recent message.
+
+        In raw mode this decodes lazily (outside the lock) and caches the
+        result, so repeated calls for the same message are free. On a
+        decode failure the previous good message is returned.
+        """
+        with self._lock:
+            raw, ts, msg, decoded_ts = self._raw, self._ts, self._msg, self._decoded_ts
+        if raw is None or decoded_ts == ts or self._decode is None:
+            return msg, (ts if raw is None or decoded_ts == ts else decoded_ts)
+        try:
+            decoded = self._decode(raw)
+        except Exception:
+            with self._lock:
+                self.decode_errors += 1
+            log.debug("decode failed on %s", self.topic, exc_info=True)
+            return msg, decoded_ts
+        with self._lock:
+            if self._ts == ts:
+                self._msg = decoded
+                self._decoded_ts = ts
+        return decoded, ts
+
+    @property
+    def last_msg(self) -> Any:
+        return self.snapshot()[0]
+
+    @property
+    def last_msg_ts(self) -> float:
+        with self._lock:
+            return self._ts
 
     def add_callback(self, cb: Callable[[Any], None]) -> None:
         """Register a per-message callback. Safe to call from any thread."""
@@ -146,11 +276,6 @@ class Subscription:
     def callback_count(self) -> int:
         with self._lock:
             return len(self.callbacks)
-
-    def snapshot(self) -> tuple[Any, float]:
-        """Return ``(last_msg, last_msg_ts)`` captured atomically."""
-        with self._lock:
-            return self.last_msg, self.last_msg_ts
 
 
 # ---------------------------------------------------------------------------
@@ -175,19 +300,30 @@ class RosBackend:
         *,
         domain_id: int | None = None,
         default_depth: int = 10,
+        discovery_period: float = 1.0,
+        shutdown_timeout: float = 2.0,
     ) -> None:
         self.node_name = node_name
         self.domain_id = domain_id
         self.default_depth = default_depth
+        self.discovery_period = discovery_period
+        self.shutdown_timeout = shutdown_timeout
 
         self._lock = threading.RLock()
         self._subscriptions: dict[str, Subscription] = {}
         self._started = False
         self._spin_thread: threading.Thread | None = None
+        self._spin_error: str | None = None
         self._executor: Any = None
         self._node: Any = None
         self._rclpy: Any = None
         self._context: Any = None
+        self._graph: GraphMonitor | None = None
+        # Used when no GraphMonitor runs (tests drive a mock node directly).
+        self._sync_snapshot: GraphSnapshot = EMPTY_SNAPSHOT
+        # Injected at start() when rclpy provides them; tests may set these.
+        self._deserialize_fn: Callable[[bytes, Any], Any] | None = None
+        self._event_callbacks_cls: Any = None
 
     # ----- lifecycle -----------------------------------------------------
 
@@ -197,7 +333,7 @@ class RosBackend:
                 return
             try:
                 import rclpy
-                from rclpy.executors import MultiThreadedExecutor
+                from rclpy.executors import SingleThreadedExecutor
             except ImportError as e:  # pragma: no cover — env-dependent
                 raise RosUnavailable(
                     "rclpy is not installed. Source your ROS 2 workspace, e.g. "
@@ -215,29 +351,60 @@ class RosBackend:
                 # Older rclpy without domain_id kwarg
                 rclpy.init(context=self._context)
 
+            self._deserialize_fn = _load_deserializer()
+            self._event_callbacks_cls = _load_event_callbacks_cls()
+
             self._node = rclpy.create_node(self.node_name, context=self._context)
-            self._executor = MultiThreadedExecutor(num_threads=4, context=self._context)
+            # With raw subscriptions the executor callbacks only copy bytes
+            # and tick counters, so one thread is plenty. Python's GIL means
+            # a MultiThreadedExecutor added scheduling overhead without real
+            # parallelism.
+            self._executor = SingleThreadedExecutor(context=self._context)
             self._executor.add_node(self._node)
+            self._spin_error = None
             self._spin_thread = threading.Thread(
                 target=self._spin, name="rosight-ros-executor", daemon=True
             )
             self._spin_thread.start()
             self._started = True
+            self._graph = GraphMonitor(self._collect_graph, self.discovery_period)
+            self._graph.start()
             log.info("rclpy backend started as %s", self.node_name)
 
     def stop(self) -> None:
+        """Tear everything down, bounded by ``shutdown_timeout``.
+
+        Every blocking step (graph thread, executor shutdown, spin-thread
+        join) has a timeout so quitting the TUI can never hang on a wedged
+        DDS call.
+        """
         with self._lock:
             if not self._started:
                 return
+            timeout = self.shutdown_timeout
             try:
-                # Tear down subs first
+                if self._graph is not None:
+                    self._graph.stop(timeout)
                 for sub in list(self._subscriptions.values()):
                     self._destroy_sub(sub)
                 self._subscriptions.clear()
                 if self._executor is not None:
-                    self._executor.shutdown()
+                    try:
+                        self._executor.shutdown(timeout_sec=timeout)
+                    except TypeError:  # pragma: no cover — very old rclpy
+                        self._executor.shutdown()
+                    except Exception:
+                        log.exception("executor shutdown failed")
+                t = self._spin_thread
+                if t is not None and t is not threading.current_thread():
+                    t.join(timeout)
+                    if t.is_alive():
+                        log.warning("executor thread did not exit within %.1fs", timeout)
                 if self._node is not None:
-                    self._node.destroy_node()
+                    try:
+                        self._node.destroy_node()
+                    except Exception:
+                        log.exception("destroy_node failed")
                 if self._rclpy is not None and self._context is not None:
                     try:
                         self._rclpy.shutdown(context=self._context)
@@ -248,7 +415,28 @@ class RosBackend:
                 self._spin_thread = None
                 self._executor = None
                 self._node = None
+                self._graph = None
+                self._sync_snapshot = EMPTY_SNAPSHOT
             log.info("rclpy backend stopped")
+
+    def restart(self) -> None:
+        """Stop and start again on the same domain (``:reconnect``)."""
+        with self._lock:
+            self.stop()
+            self.start()
+
+    @property
+    def executor_alive(self) -> bool:
+        """False when the backend is started but its spin thread has died."""
+        if not self._started:
+            return False
+        t = self._spin_thread
+        # No thread at all means a test/mock backend: treat as healthy.
+        return t is None or t.is_alive()
+
+    @property
+    def last_error(self) -> str | None:
+        return self._spin_error
 
     def __enter__(self) -> RosBackend:
         self.start()
@@ -278,7 +466,8 @@ class RosBackend:
     def _spin(self) -> None:
         try:
             self._executor.spin()
-        except Exception:
+        except Exception as e:
+            self._spin_error = f"{type(e).__name__}: {e}"
             log.exception("executor stopped with error")
 
     # ----- discovery -----------------------------------------------------
@@ -286,6 +475,29 @@ class RosBackend:
     @property
     def started(self) -> bool:
         return self._started
+
+    def _collect_graph(self) -> tuple[list[Any], list[Any], list[Any], list[Any]]:
+        return self.list_topics(), self.list_nodes(), self.list_services(), self.list_actions()
+
+    def graph_snapshot(self) -> GraphSnapshot:
+        """Latest graph snapshot (O(1) when the background monitor runs).
+
+        Without a monitor (mock/test backends) this collects synchronously,
+        still bumping ``generation`` only when the content changed.
+        """
+        if not self._started:
+            return EMPTY_SNAPSHOT
+        graph = self._graph
+        if graph is not None:
+            return graph.latest
+        with self._lock:
+            self._sync_snapshot = next_snapshot(self._sync_snapshot, self._collect_graph)
+            return self._sync_snapshot
+
+    def request_graph_refresh(self) -> None:
+        graph = self._graph
+        if graph is not None:
+            graph.request_refresh()
 
     def _require_node(self):
         if not self._started or self._node is None:
@@ -424,11 +636,7 @@ class RosBackend:
 
             # Resolve type
             if type_name is None:
-                topics = {t.name: t for t in self.list_topics()}
-                ti = topics.get(topic)
-                if ti is None or not ti.types:
-                    raise ValueError(f"topic {topic!r} has no known type")
-                type_name = ti.primary_type
+                type_name = self._resolve_topic_type(topic)
             msg_cls = get_message_class(type_name)
 
             # QoS auto-match
@@ -436,27 +644,70 @@ class RosBackend:
                 spec = qos_mod.negotiate(self.publisher_qos(topic), self.default_depth)
             profile = qos_mod.to_rclpy(spec)
 
-            sub = Subscription(topic=topic, type_name=type_name)
+            deserialize = self._deserialize_fn
+            decode = None
+            if deserialize is not None:
+
+                def decode(data: bytes, _cls: Any = msg_cls) -> Any:
+                    return deserialize(data, _cls)
+
+            sub = Subscription(topic=topic, type_name=type_name, decode=decode)
             if on_message:
                 sub.callbacks.append(on_message)
 
-            def _cb(msg: Any) -> None:
-                ts = time.monotonic()
-                sub.rate.tick(ts)
-                sub.bandwidth.tick(estimate_msg_size(msg), ts)
-                with sub._lock:
-                    sub.last_msg = msg
-                    sub.last_msg_ts = ts
-                    cbs = list(sub.callbacks)
-                for cb in cbs:
-                    try:
-                        cb(msg)
-                    except Exception:
-                        log.exception("subscriber callback raised")
-
-            sub._handle = node.create_subscription(msg_cls, topic, _cb, profile)
+            sub._handle = self._create_rclpy_subscription(node, msg_cls, topic, profile, sub)
             self._subscriptions[topic] = sub
             return sub
+
+    def _resolve_topic_type(self, topic: str) -> str:
+        snap = self.graph_snapshot()
+        candidates = snap.topics if snap.generation else self.list_topics()
+        ti = next((t for t in candidates if t.name == topic), None)
+        if ti is None or not ti.types:
+            raise ValueError(f"topic {topic!r} has no known type")
+        return ti.primary_type
+
+    def _create_rclpy_subscription(
+        self, node: Any, msg_cls: Any, topic: str, profile: Any, sub: Subscription
+    ) -> Any:
+        """Create the rclpy subscription with the best options available.
+
+        Tries, in order: raw bytes + QoS-event callbacks, raw only, decoded +
+        QoS events, plain decoded. Each step drops a keyword that an older
+        rclpy (or a test double) may not accept. If raw mode can't be used
+        the Subscription is switched to decoded ingestion.
+        """
+        events = None
+        if self._event_callbacks_cls is not None:
+            try:
+                events = self._event_callbacks_cls(incompatible_qos=sub.on_incompatible_qos)
+            except Exception:
+                log.debug("could not build SubscriptionEventCallbacks", exc_info=True)
+
+        attempts: list[tuple[bool, Any]] = []
+        for raw in (True, False) if sub.raw_mode else (False,):
+            if events is not None:
+                attempts.append((raw, events))
+            attempts.append((raw, None))
+
+        last_error: TypeError | None = None
+        for raw, ev in attempts:
+            kwargs: dict[str, Any] = {}
+            if raw:
+                kwargs["raw"] = True
+            if ev is not None:
+                kwargs["event_callbacks"] = ev
+            callback = sub.ingest_raw if raw else sub.ingest_msg
+            try:
+                handle = node.create_subscription(msg_cls, topic, callback, profile, **kwargs)
+            except TypeError as e:
+                last_error = e
+                continue
+            if not raw:
+                sub._decode = None
+            return handle
+        assert last_error is not None
+        raise last_error
 
     def unsubscribe(self, topic: str) -> None:
         with self._lock:
@@ -526,23 +777,18 @@ class RosBackend:
             if not client.wait_for_service(timeout_sec=timeout):
                 raise TimeoutError(f"service {service!r} unavailable")
             future = client.call_async(request)
-            # The executor already spins our node on its own thread; we
-            # just need to block until the future completes or we time
-            # out. ``concurrent.futures``-style ``result(timeout=...)`` is
-            # available on rclpy's Future via the same name.
-            try:
-                return future.result(timeout=timeout)
-            except TimeoutError:
-                raise
-            except Exception:
-                # Some rclpy versions don't accept the ``timeout`` kwarg;
-                # fall back to a watch loop with a wakeable Event.
-                deadline = time.monotonic() + timeout
-                done = threading.Event()
-                future.add_done_callback(lambda _f: done.set())
-                if not done.wait(timeout=max(0.0, deadline - time.monotonic())):
-                    raise TimeoutError(f"service call to {service!r} timed out") from None
-                return future.result()
+            # The executor spins our node on its own thread, so the response
+            # completes the future there; we just block on an Event.
+            # (rclpy's Future.result() takes no timeout argument.)
+            done = threading.Event()
+            future.add_done_callback(lambda _f: done.set())
+            if not done.wait(timeout=timeout):
+                try:
+                    client.remove_pending_request(future)
+                except Exception:
+                    pass
+                raise TimeoutError(f"service call to {service!r} timed out")
+            return future.result()
         finally:
             node.destroy_client(client)
 
@@ -667,3 +913,31 @@ def _build_param_value(pv: Any, value: Any) -> Any:
             setattr(pv, attr, value)
             return pv
     raise TypeError(f"unsupported parameter type: {type(value).__name__}")
+
+
+# ---------------------------------------------------------------------------
+# Optional rclpy capabilities (resolved at start(); absent in tests)
+# ---------------------------------------------------------------------------
+
+
+def _load_deserializer() -> Callable[[bytes, Any], Any] | None:
+    """``rclpy.serialization.deserialize_message`` if available.
+
+    Enables raw-bytes subscriptions with lazy decoding.
+    """
+    try:
+        from rclpy.serialization import deserialize_message  # type: ignore
+    except Exception:  # pragma: no cover — env-dependent
+        return None
+    return deserialize_message  # type: ignore[no-any-return]
+
+
+def _load_event_callbacks_cls() -> Any:
+    """``SubscriptionEventCallbacks`` (moved between rclpy releases)."""
+    for mod in ("rclpy.event_handler", "rclpy.qos_event"):
+        try:
+            module = __import__(mod, fromlist=["SubscriptionEventCallbacks"])
+            return module.SubscriptionEventCallbacks
+        except Exception:
+            continue
+    return None  # pragma: no cover — env-dependent

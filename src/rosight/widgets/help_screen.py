@@ -65,7 +65,7 @@ HELP_TEXT = """\
 ## Bags
 | key | action |
 |-----|--------|
-| `R` | start/stop record |
+| `R` | start/stop record (stops gracefully; children are stopped on exit) |
 | `p` | play |
 | `i` | bag info |
 
@@ -78,6 +78,7 @@ HELP_TEXT = """\
 | `view <topic>` | open image preview for an Image / CompressedImage topic |
 | `record` | jump to Bags |
 | `domain <N>` | restart rclpy on ROS_DOMAIN_ID `N` (0..232) |
+| `reconnect` | restart the ROS backend (e.g. after the executor stopped) |
 | `quit` | exit the app |
 """
 

@@ -97,6 +97,7 @@ class ImagePreviewScreen(ModalScreen[None]):
         self._paused: bool = False
         self._colormap_idx: int = 0
         self._owned_subscription: bool = False
+        self._force_render: bool = False
         self._image_widget: Any = None  # textual_image.widget.Image lazily added
         self._last_decoded: Any = None  # PIL.Image, used for save
 
@@ -112,17 +113,18 @@ class ImagePreviewScreen(ModalScreen[None]):
         if self.ros is None or not getattr(self.ros, "started", False):
             self._set_header_warning("ROS backend not running")
             return
-        # Reuse an existing subscription if any; otherwise own one.
+        # Reuse an existing subscription if any; otherwise own one. We poll
+        # ``sub.snapshot()`` at the render rate instead of registering a
+        # per-message callback: with raw subscriptions that means a 30 Hz
+        # camera is decoded ~5x/s here, not 30x/s on the executor thread.
         try:
             existing = self.ros.get_subscription(self.topic)
         except Exception:
             existing = None
         try:
             if existing is None:
-                self.ros.subscribe(self.topic, self.type_name, on_message=self._on_msg)
+                self.ros.subscribe(self.topic, self.type_name)
                 self._owned_subscription = True
-            else:
-                existing.add_callback(self._on_msg)
         except Exception:
             log.exception("image subscribe failed")
             self._set_header_warning("subscribe failed — see logs")
@@ -131,29 +133,25 @@ class ImagePreviewScreen(ModalScreen[None]):
 
     def on_unmount(self) -> None:
         ros = self.ros
-        if ros is None:
+        if ros is None or not self._owned_subscription:
             return
+        # Tear down only a subscription we created, and only if nobody
+        # registered a callback on it meanwhile.
         try:
             sub = ros.get_subscription(self.topic)
+            if sub is not None and sub.callback_count() == 0:
+                ros.unsubscribe(self.topic)
         except Exception:
-            sub = None
-        if sub is not None:
-            # Detach our callback (no-op if not present) and tear down the
-            # subscription only if we created it AND nobody else is listening
-            # — otherwise leave it for the topics panel.
-            sub.remove_callback(self._on_msg)
-            if self._owned_subscription and sub.callback_count() == 0:
-                try:
-                    ros.unsubscribe(self.topic)
-                except Exception:
-                    log.debug("unsubscribe on close failed", exc_info=True)
+            log.debug("unsubscribe on close failed", exc_info=True)
 
-    # ----- callback (rclpy thread) ----------------------------------------
-
-    def _on_msg(self, msg: Any) -> None:
-        # Just stash the latest message; decode happens on the Textual loop.
-        self._latest_msg = msg
-        self._latest_msg_ts = time.monotonic()
+    def _latest(self) -> tuple[Any, float]:
+        try:
+            sub = self.ros.get_subscription(self.topic)
+        except Exception:
+            return None, 0.0
+        if sub is None:
+            return None, 0.0
+        return sub.snapshot()
 
     # ----- render (Textual loop) ------------------------------------------
     # NOTE: do NOT rename to ``_render`` — Textual's ``Widget._render`` is
@@ -164,9 +162,11 @@ class ImagePreviewScreen(ModalScreen[None]):
     def _tick_render(self) -> None:
         if self._paused:
             return
-        msg = self._latest_msg
-        if msg is None:
+        msg, ts = self._latest()
+        if msg is None or (ts == self._latest_msg_ts and not self._force_render):
             return
+        self._latest_msg, self._latest_msg_ts = msg, ts
+        self._force_render = False
         try:
             if self._compressed:
                 img = decode_compressed_image(msg)
@@ -256,7 +256,8 @@ class ImagePreviewScreen(ModalScreen[None]):
             )
             return
         self._colormap_idx = (self._colormap_idx + 1) % len(_COLORMAPS)
-        # Force a re-render with the new colormap.
+        # Force a re-render of the current frame with the new colormap.
+        self._force_render = True
         self._tick_render()
 
     def action_save(self) -> None:

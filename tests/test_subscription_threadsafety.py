@@ -33,9 +33,7 @@ def test_add_remove_callback_basic():
 
 def test_snapshot_returns_atomic_pair():
     sub = Subscription(topic="/x", type_name="t")
-    with sub._lock:
-        sub.last_msg = "hello"
-        sub.last_msg_ts = 12.5
+    sub._set_latest("hello", 12.5)
     assert sub.snapshot() == ("hello", 12.5)
 
 
@@ -50,9 +48,7 @@ def test_snapshot_under_concurrent_writes_never_tears():
     def writer():
         i = 0
         while not stop.is_set():
-            with sub._lock:
-                sub.last_msg = i
-                sub.last_msg_ts = float(i)
+            sub._set_latest(i, float(i))
             i += 1
 
     def reader():

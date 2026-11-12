@@ -72,7 +72,11 @@ class RosightApp(App[int]):
         self.ros: RosBackend = ros or RosBackend(
             domain_id=self.config.ros.domain_id,
             default_depth=self.config.ros.queue_depth,
+            discovery_period=self.config.ui.discovery_period,
         )
+        # Set once we've told the user the executor died, so the 1 Hz status
+        # tick doesn't spam notifications.
+        self._executor_down_notified = False
 
     # --------------- compose / lifecycle ---------------
 
@@ -169,7 +173,11 @@ class RosightApp(App[int]):
 
     def action_refresh(self) -> None:
         self.push_status("refresh requested")
-        # Each panel polls on a timer; nothing else needed.
+        # Wake the background graph monitor; panels pick the new snapshot
+        # up on their next tick.
+        request = getattr(self.ros, "request_graph_refresh", None)
+        if callable(request):
+            request()
 
     def action_tab(self, tab_id: str) -> None:
         try:
@@ -213,19 +221,48 @@ class RosightApp(App[int]):
         # setup/teardown ordering. Tests sometimes swap ``self.ros`` for a
         # minimal stub that mimics only the methods they exercise, so reach
         # for attributes defensively rather than assuming a full RosBackend.
-        started = getattr(self.ros, "started", False)
-        bar.backend_ok = self.backend_ok and started
-        bar.domain_id = getattr(self.ros, "domain_id", None)
+        ros = self.ros
+        started = getattr(ros, "started", False)
+        alive = getattr(ros, "executor_alive", True) if started else False
+        bar.backend_ok = self.backend_ok and started and alive
+        bar.domain_id = getattr(ros, "domain_id", None)
+        if started and not alive:
+            self._on_executor_down()
+        elif alive:
+            self._executor_down_notified = False
         if not started:
             return
         try:
-            bar.topics = len(self.ros.list_topics())
-            bar.nodes = len(self.ros.list_nodes())
-            bar.services = len(self.ros.list_services())
-            bar.actions = len(self.ros.list_actions())
-            bar.subs = len(self.ros.active_subscriptions())
+            snap_fn = getattr(ros, "graph_snapshot", None)
+            if callable(snap_fn):
+                # O(1): read the background monitor's snapshot instead of
+                # four synchronous graph queries per second.
+                snap = snap_fn()
+                topics, nodes, services, actions = snap.content()
+            else:
+                topics, nodes = ros.list_topics(), ros.list_nodes()
+                services, actions = ros.list_services(), ros.list_actions()
+            bar.topics, bar.nodes = len(topics), len(nodes)
+            bar.services, bar.actions = len(services), len(actions)
+            bar.subs = len(ros.active_subscriptions())
         except Exception:
             log.debug("status refresh failed", exc_info=True)
+
+    def _on_executor_down(self) -> None:
+        """The rclpy spin thread died: nothing will be received any more."""
+        err = getattr(self.ros, "last_error", None)
+        self.push_status("ROS executor stopped — run :reconnect")
+        if self._executor_down_notified:
+            return
+        self._executor_down_notified = True
+        detail = f"\n{err}" if err else ""
+        self.notify(
+            f"The ROS executor thread stopped; topics will not update.{detail}\n"
+            "Run :reconnect to restart the backend.",
+            title="ROS executor stopped",
+            severity="error",
+            timeout=15,
+        )
 
     # --------------- command palette ---------------
 
@@ -249,6 +286,7 @@ class RosightApp(App[int]):
             "record": self._cmd_record,
             "help": self._cmd_help,
             "domain": self._cmd_domain,
+            "reconnect": self._cmd_reconnect,
         }
 
     def _on_command_submitted(self, raw: str | None) -> None:
@@ -319,6 +357,24 @@ class RosightApp(App[int]):
     def _cmd_help(self, _args: list[str]) -> bool:
         self.action_help()
         return True
+
+    def _cmd_reconnect(self, _args: list[str]) -> bool:
+        self.push_status("reconnecting…")
+        self.run_worker(self._apply_reconnect(), group="rosight-domain", exclusive=True)
+        return True
+
+    async def _apply_reconnect(self) -> None:
+        try:
+            await asyncio.to_thread(self.ros.restart)
+            self.backend_ok = self.ros.started
+            self._executor_down_notified = False
+            self.notify("ROS backend restarted\n(subscriptions cleared)", title="Reconnect")
+        except RosUnavailable as e:
+            self.backend_ok = False
+            self.notify(str(e), title="ROS 2 unavailable", severity="warning")
+        except Exception as e:
+            log.exception("reconnect failed")
+            self.notify(f"reconnect failed: {e}", severity="error")
 
     def _cmd_domain(self, args: list[str]) -> bool:
         if not args:
